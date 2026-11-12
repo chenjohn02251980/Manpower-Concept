@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #040406;
+    color: #e5e1e6;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  display: inline-block;
+  user-select: none;
+}
+
+.material-symbols-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  display: inline-block;
+  user-select: none;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #131316;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2D2E35;
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #524437;
+}
+
+/* Data input table styling */
+.data-table-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #2D2E35;
+  color: #e5e1e6;
+  width: 100%;
+  padding: 4px 8px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.data-table-input:focus {
+  outline: none;
+  border-bottom-color: #ffb86b;
+  background: rgba(255, 184, 107, 0.08);
+  box-shadow: 0 1px 0 0 #ffb86b;
+}
+
+.data-table-input-left {
+  text-align: left;
+}
+
+/* Select element styling */
+.data-table-select {
+  background-color: #131316;
+  border: none;
+  border-bottom: 1px solid #2D2E35;
+  color: #e5e1e6;
+  font-size: 0.75rem;
+  padding: 4px 6px;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.data-table-select:focus {
+  border-bottom-color: #ffb86b;
+}
+
+/* Number input spinner hiding for clean look */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

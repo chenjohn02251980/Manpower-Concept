@@ -1,0 +1,21 @@
+node_modules/
+build/
+dist/
+dist-single/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python caches and generated artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+report.html
+IE_Manpower_Forecast_App.html
+
+# Editor & IDE files
+.vscode/
+.idea/
+*.swp

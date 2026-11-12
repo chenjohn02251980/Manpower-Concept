@@ -1,0 +1,6 @@
+{
+  "name": "IE Manpower Forecast & Maintenance",
+  "description": "Enterprise Industrial Engineering (IE) Manpower Forecasting & Capacity Planning System with APS Demand Engine, Cost Center Payroll Analysis, and Multi-Plant Baseline Management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
