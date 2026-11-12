@@ -1703,6 +1703,11 @@ if os.path.exists('dist'):
     with open('dist/.nojekyll', 'w', encoding='utf-8') as f:
         f.write('')
 
+    # Mirror dist to docs/ folder (supporting 'Deploy from a branch -> main /docs')
+    if os.path.exists('docs'):
+        shutil.rmtree('docs')
+    shutil.copytree('dist', 'docs')
+
 with open('report.html', 'w', encoding='utf-8') as f:
     f.write(html_template)
 

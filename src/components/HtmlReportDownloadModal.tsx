@@ -816,7 +816,7 @@ export const HtmlReportDownloadModal: React.FC<HtmlReportDownloadModalProps> = (
                   <div className="text-[11px] text-[#d7c3b2]/60">Test single-file standalone execution directly in your browser without downloading</div>
                 </div>
                 <a
-                  href="/IE_Manpower_Forecast_App.html"
+                  href="./IE_Manpower_Forecast_App.html"
                   target="_blank"
                   rel="noreferrer"
                   className="px-3.5 py-1.5 bg-[#2a292d] hover:bg-[#38363d] text-[#5de6ff] text-xs font-['JetBrains_Mono'] rounded-lg border border-[#5de6ff]/30 hover:border-[#5de6ff] transition-all flex items-center gap-1.5"

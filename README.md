@@ -96,11 +96,26 @@ npm run preview
 
 ## 🌐 部署至 GitHub Pages (Deploy to GitHub Pages)
 
-本專案 `vite.config.ts` 已預設配置相對路徑 `base: './'`，並在 `public/` 內包含 `.nojekyll`，可無縫支援 GitHub Pages 子路徑部署：
+本專案已完整配置支援 **GitHub Pages**（預設相對路徑 `base: './'`、`.nojekyll` 防 Jekyll 誤編譯、`404.html` SPA 客戶端路由跳轉）：
 
-1. 在 GitHub 儲存庫的 **Settings** > **Pages**。
-2. **Build and deployment** 來源選擇 **GitHub Actions**。
-3. 可建立標準 Vite 部署 workflow，或直接將 `dist/` 推送至 `gh-pages` 分支。
+### 網頁發布網址：
+🔗 **https://chenjohn02251980.github.io/Manpower-Concept/**
+
+### 兩種 GitHub Pages 啟用設定方式（任選一種皆可）：
+
+#### 推薦方式 1：使用 GitHub Actions 自動編譯（已配置完成）
+1. 進入 GitHub 儲存庫頁面，點選頂部 **Settings**。
+2. 左側選單點選 **Pages**。
+3. 在 **Build and deployment** 下方的 **Source**，切換為 **GitHub Actions**。
+4. 當代碼推送到 `main` 分支時，`.github/workflows/jekyll-gh-pages.yml` 會自動執行 Vite 生產編譯並發布至 GitHub Pages！
+
+#### 備用方式 2：使用 Branch 分支部署
+1. 進入 GitHub 儲存庫的 **Settings** > **Pages**。
+2. 在 **Source** 選擇 **Deploy from a branch**。
+3. 分支可選擇：
+   - **`gh-pages`** 分支，資料夾選擇 **`/(root)`**（Actions 自動推送）
+   - 或 **`main`** 分支，資料夾選擇 **`/docs`**（已內建編譯成品）
+4. 點擊 **Save**，約 1~2 分鐘後即可正常開啟網頁！
 
 ---
 
