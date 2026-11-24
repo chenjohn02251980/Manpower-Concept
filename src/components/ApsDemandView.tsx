@@ -3,6 +3,7 @@ import { SiteData, TimePeriod } from '../types';
 import { SmtPcaContinuityView } from './SmtPcaContinuityView';
 import {
   generateMonthlyApsPlan,
+  generateOverallApsPlan,
   getNextMonthPeriod,
   getDatesForMonth,
   getLineSummariesForMonth,
@@ -15,6 +16,7 @@ import {
 
 interface ApsDemandViewProps {
   site: SiteData;
+  sites?: Record<string, SiteData>;
   timePeriod: TimePeriod;
   selectedYear: number;
   selectedMonth: number;
@@ -25,6 +27,7 @@ interface ApsDemandViewProps {
 
 export const ApsDemandView: React.FC<ApsDemandViewProps> = ({
   site,
+  sites,
   timePeriod,
   selectedYear,
   selectedMonth,
@@ -67,18 +70,21 @@ export const ApsDemandView: React.FC<ApsDemandViewProps> = ({
   const targetMonthName = monthNames[targetMonth - 1] || `Month ${targetMonth}`;
 
   // Compute baseline plan
-  const basePlan = generateMonthlyApsPlan(site, selectedYear, selectedMonth);
+  const basePlan =
+    site.id === 'overall' && sites
+      ? generateOverallApsPlan(sites, selectedYear, selectedMonth)
+      : generateMonthlyApsPlan(site, selectedYear, selectedMonth);
 
-  // Baseline online DL from un-overridden shifts
-  const baselineOnlineDL = basePlan.lines.reduce(
-    (sum, l) => sum + l.ieStdDLPerShift * (l.dailyShifts || 1),
-    0
-  );
+  // Baseline online DL from un-overridden APS plan
+  const baselineOnlineDL = basePlan.totalOnlineDL;
 
   // Apply any temporary shift overrides to the plan lines
   const linesWithOverrides = basePlan.lines.map((l) => {
-    const currentShift = shiftOverrides[l.lineId] ?? l.dailyShifts;
-    const dailyRequiredDL = l.ieStdDLPerShift * currentShift;
+    const hasOverride = shiftOverrides[l.lineId] !== undefined;
+    const currentShift = hasOverride ? shiftOverrides[l.lineId] : l.dailyShifts;
+    const dailyRequiredDL = hasOverride
+      ? Math.round(l.ieStdDLPerShift * currentShift)
+      : l.dailyRequiredDL;
     return {
       ...l,
       dailyShifts: currentShift,

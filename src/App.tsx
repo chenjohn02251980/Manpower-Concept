@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewTab, TimePeriod, SiteData, NotificationItem, FeedbackItem, IeStandardSubTab, AnnualManpowerTab } from './types';
 import { INITIAL_SITES, INITIAL_NOTIFICATIONS, INITIAL_FEEDBACKS } from './data/mockData';
 import { calculateSiteMetrics, calculateOverallSite } from './utils/calculations';
-import { generateMonthlyApsPlan } from './utils/apsSchedule';
+import { generateMonthlyApsPlan, generateOverallApsPlan } from './utils/apsSchedule';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -116,6 +116,12 @@ export default function App() {
             smtOfflineDL: site.smtOfflineDL ?? initSite.smtOfflineDL ?? 8,
             pcaOfflineDL: site.pcaOfflineDL ?? initSite.pcaOfflineDL ?? 6,
             assemblyOfflineDL: site.assemblyOfflineDL ?? initSite.assemblyOfflineDL ?? 12,
+            smtOfflineShift: typeof site.smtOfflineShift === 'number' ? site.smtOfflineShift : (initSite.smtOfflineShift ?? 2),
+            pcaOfflineShift: typeof site.pcaOfflineShift === 'number' ? site.pcaOfflineShift : (initSite.pcaOfflineShift ?? 2),
+            assemblyOfflineShift: typeof site.assemblyOfflineShift === 'number' ? site.assemblyOfflineShift : (initSite.assemblyOfflineShift ?? 2),
+            smtIdlShift: typeof site.smtIdlShift === 'number' ? site.smtIdlShift : (initSite.smtIdlShift ?? 2),
+            pcaIdlShift: typeof site.pcaIdlShift === 'number' ? site.pcaIdlShift : (initSite.pcaIdlShift ?? 2),
+            assemblyIdlShift: typeof site.assemblyIdlShift === 'number' ? site.assemblyIdlShift : (initSite.assemblyIdlShift ?? 2),
             smtLines: (site.smtLines || initSite.smtLines).map((l: any, idx: number) => ({
               ...l,
               shift: typeof l.shift === 'number' ? l.shift : (l.shift === 'Night' ? 2 : 1),
@@ -237,8 +243,11 @@ export default function App() {
   const metrics = calculateSiteMetrics(currentSite, timePeriod);
 
   const currentApsPlan = React.useMemo(
-    () => generateMonthlyApsPlan(currentSite, selectedYear, selectedMonth),
-    [currentSite, selectedYear, selectedMonth]
+    () =>
+      currentSiteId === 'overall'
+        ? generateOverallApsPlan(sites, selectedYear, selectedMonth)
+        : generateMonthlyApsPlan(currentSite, selectedYear, selectedMonth),
+    [currentSiteId, sites, currentSite, selectedYear, selectedMonth]
   );
 
   const showToast = (message: string) => {
@@ -354,6 +363,8 @@ export default function App() {
             <SummaryCards
               metrics={metrics}
               apsDemandDL={currentApsPlan.totalApsDemandDL}
+              apsDemandIDL={currentApsPlan.fixedIDL}
+              apsPlan={currentApsPlan}
               hrActualDL={currentSite.actualHrDL}
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}
@@ -392,6 +403,8 @@ export default function App() {
                 <SummaryCards
                   metrics={metrics}
                   apsDemandDL={currentApsPlan.totalApsDemandDL}
+                  apsDemandIDL={currentApsPlan.fixedIDL}
+                  apsPlan={currentApsPlan}
                   hrActualDL={currentSite.actualHrDL}
                   selectedYear={selectedYear}
                   selectedMonth={selectedMonth}
@@ -405,6 +418,7 @@ export default function App() {
           {activeTab === 'aps_demand' && (
             <ApsDemandView
               site={currentSite}
+              sites={sites}
               timePeriod={timePeriod}
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}

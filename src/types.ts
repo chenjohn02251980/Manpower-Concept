@@ -118,9 +118,15 @@ export interface MonthDepartmentSnapshot {
   smtOfflineDL: number;
   pcaOfflineDL: number;
   assemblyOfflineDL: number;
+  smtOfflineShift?: ShiftNumber;
+  pcaOfflineShift?: ShiftNumber;
+  assemblyOfflineShift?: ShiftNumber;
   smtIdl: number;
   pcaIdl: number;
   assemblyIdl: number;
+  smtIdlShift?: ShiftNumber;
+  pcaIdlShift?: ShiftNumber;
+  assemblyIdlShift?: ShiftNumber;
   smtLines: SmtLine[];
   pcaLines: PcaLine[];
   cpuAssemblyLines: CpuAssemblyLine[];
@@ -180,10 +186,16 @@ export interface SiteData {
   smtOfflineDL: number;
   pcaOfflineDL: number;
   assemblyOfflineDL: number;
+  smtOfflineShift?: ShiftNumber;
+  pcaOfflineShift?: ShiftNumber;
+  assemblyOfflineShift?: ShiftNumber;
   // Segment IDL
   smtIdl: number;
   pcaIdl: number;
   assemblyIdl: number;
+  smtIdlShift?: ShiftNumber;
+  pcaIdlShift?: ShiftNumber;
+  assemblyIdlShift?: ShiftNumber;
   // Cost Center (HR System Integration - supports multiple cost centers)
   smtCostCenter?: string | string[];
   pcaCostCenter?: string | string[];
@@ -254,6 +266,28 @@ export interface MonthlyApsPlan {
   mfgIDL: number;
   supportIDL: number;
   totalDemandHeadcount: number; // totalApsDemandDL + fixedIDL
+  // Optional granular APS-driven breakdown & schedule statistics
+  smtOfflineDL?: number;
+  pcaOfflineDL?: number;
+  assemblyOfflineDL?: number;
+  qcDL?: number;
+  tsDL?: number;
+  whDL?: number;
+  otherSupportDL?: number;
+  scheduleStats?: {
+    smtActiveDays: number;
+    smtAvgFloorShifts: number;
+    smtAvgActiveLineShifts: number;
+    smtIeCapacityShifts: number;
+    pcaAvgActiveLineShifts: number;
+    pcaIeCapacityShifts: number;
+    assyActiveDays: number;
+    assyAvgFloorShifts: number;
+    cpuAvgActiveLineShifts: number;
+    cpuIeCapacityShifts: number;
+    rackAvgActiveLineShifts: number;
+    rackIeCapacityShifts: number;
+  };
 }
 
 export interface CostCenterPayrollWeekly {

@@ -184,6 +184,18 @@ export function calculateOverallSite(sites: Record<string, SiteData>): SiteData 
   const pcaIdl = siteList.reduce((sum, s) => sum + (s.pcaIdl || 0), 0);
   const assemblyIdl = siteList.reduce((sum, s) => sum + (s.assemblyIdl || 0), 0);
 
+  const avgShiftFor = (getter: (s: SiteData) => number | undefined) => {
+    if (siteList.length === 0) return 2 as const;
+    const avg = Math.round(siteList.reduce((sum, s) => sum + (typeof getter(s) === 'number' ? (getter(s) as number) : 2), 0) / siteList.length);
+    return Math.min(4, Math.max(0, avg)) as 0 | 1 | 2 | 3 | 4;
+  };
+  const smtOfflineShift = avgShiftFor((s) => s.smtOfflineShift);
+  const pcaOfflineShift = avgShiftFor((s) => s.pcaOfflineShift);
+  const assemblyOfflineShift = avgShiftFor((s) => s.assemblyOfflineShift);
+  const smtIdlShift = avgShiftFor((s) => s.smtIdlShift);
+  const pcaIdlShift = avgShiftFor((s) => s.pcaIdlShift);
+  const assemblyIdlShift = avgShiftFor((s) => s.assemblyIdlShift);
+
   // Concat all lines with site identifiers
   const smtLines = siteList.flatMap((s) =>
     (s.smtLines || []).map((line) => ({
@@ -282,9 +294,15 @@ export function calculateOverallSite(sites: Record<string, SiteData>): SiteData 
     smtOfflineDL,
     pcaOfflineDL,
     assemblyOfflineDL,
+    smtOfflineShift,
+    pcaOfflineShift,
+    assemblyOfflineShift,
     smtIdl,
     pcaIdl,
     assemblyIdl,
+    smtIdlShift,
+    pcaIdlShift,
+    assemblyIdlShift,
     smtCostCenter: smtCostCenter.length > 0 ? smtCostCenter : 'CC-ALL-SMT',
     pcaCostCenter: pcaCostCenter.length > 0 ? pcaCostCenter : 'CC-ALL-PCA',
     assemblyCostCenter: assemblyCostCenter.length > 0 ? assemblyCostCenter : 'CC-ALL-SYS',

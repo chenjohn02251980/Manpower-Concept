@@ -16,6 +16,7 @@ import { SiteData, TimePeriod, CostCenterPayrollWeekly, AnnualManpowerTab } from
 import { calculateSiteMetrics } from '../utils/calculations';
 import {
   generateMonthlyApsPlan,
+  generateOverallApsPlan,
   generateCostCenterPayrollData,
   generate12MonthTrend,
   getMonthlyApsVolumes,
@@ -517,15 +518,18 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const monthLabel = monthNames[selectedMonth - 1] || `Month ${selectedMonth}`;
 
   // Compute monthly APS plan and Cost Center payroll data
-  const currentApsPlan = generateMonthlyApsPlan(currentSite, selectedYear, selectedMonth);
+  const currentApsPlan =
+    currentSite.id === 'overall'
+      ? generateOverallApsPlan(sites, selectedYear, selectedMonth)
+      : generateMonthlyApsPlan(currentSite, selectedYear, selectedMonth);
   const costCenterData = generateCostCenterPayrollData(currentSite, currentApsPlan);
 
   const monthlyApsDemandDL = currentApsPlan.totalApsDemandDL;
-  const monthlyApsDemandIDL = currentMetrics.totalIDL;
+  const monthlyApsDemandIDL = currentApsPlan.fixedIDL;
   const monthlyApsTotal = monthlyApsDemandDL + monthlyApsDemandIDL;
 
   const hrMonthEndDL = costCenterData.reduce((sum, r) => sum + r.monthEndDL, 0);
-  const hrMonthEndIDL = currentSite.actualHrIDL !== undefined ? currentSite.actualHrIDL : currentMetrics.totalIDL;
+  const hrMonthEndIDL = currentSite.actualHrIDL !== undefined ? currentSite.actualHrIDL : currentApsPlan.fixedIDL;
   const hrTotalPaid = hrMonthEndDL + hrMonthEndIDL;
 
   const netVariance = hrMonthEndDL - monthlyApsDemandDL;
@@ -533,7 +537,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const fulfillmentRate = Math.round((hrTotalPaid / (monthlyApsTotal || 1)) * 100);
 
   // 12-Month Annual Trend Data
-  const annualTrend = generate12MonthTrend(currentSite, selectedYear, selectedMonth);
+  const annualTrend = generate12MonthTrend(currentSite, selectedYear, selectedMonth, sites);
 
   // Selected Month Budget Manpower & Department allocation
   const selectedMonthBudget = getMonthlyBudgetManpower(currentSite, selectedMonth);
@@ -917,11 +921,11 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
               .map(({ site: s, metrics, apsPlan }) => {
                 const sVolumes = getMonthlyApsVolumes(s, selectedMonth);
                 const sApsDL = apsPlan.totalApsDemandDL;
-                const sApsIDL = metrics.totalIDL;
+                const sApsIDL = apsPlan.fixedIDL;
                 const sApsTotal = sApsDL + sApsIDL;
 
                 const sHrDL = s.actualHrDL || sApsDL;
-                const sHrIDL = s.actualHrIDL !== undefined ? s.actualHrIDL : metrics.totalIDL;
+                const sHrIDL = s.actualHrIDL !== undefined ? s.actualHrIDL : apsPlan.fixedIDL;
                 const sHrTotal = sHrDL + sHrIDL;
 
                 const sBudget = getMonthlyBudgetManpower(s, selectedMonth);
@@ -1026,11 +1030,11 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                 (acc, { site: s, metrics, apsPlan }) => {
                   const sVolumes = getMonthlyApsVolumes(s, selectedMonth);
                   const sApsDL = apsPlan.totalApsDemandDL;
-                  const sApsIDL = metrics.totalIDL;
+                  const sApsIDL = apsPlan.fixedIDL;
                   const sApsTotal = sApsDL + sApsIDL;
 
                   const sHrDL = s.actualHrDL || sApsDL;
-                  const sHrIDL = s.actualHrIDL !== undefined ? s.actualHrIDL : metrics.totalIDL;
+                  const sHrIDL = s.actualHrIDL !== undefined ? s.actualHrIDL : apsPlan.fixedIDL;
                   const sHrTotal = sHrDL + sHrIDL;
 
                   const sBudget = getMonthlyBudgetManpower(s, selectedMonth);

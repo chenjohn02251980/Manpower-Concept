@@ -143,129 +143,665 @@ export function getLineIeStandardDL(site: SiteData, lineName: string): number {
   return 30; // standard fallback
 }
 
+const SMT_MONTH_FACTORS: Record<number, number> = {
+  1: 0.95, 2: 0.88, 3: 0.98, 4: 1.0, 5: 1.02, 6: 1.04, 7: 1.06, 8: 1.0, 9: 1.01, 10: 1.05, 11: 1.02, 12: 0.97,
+};
+
+function normalizeLineCode(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function isRackLineName(name: string): boolean {
+  const norm = name.toUpperCase().trim();
+  return norm.startsWith('R') || norm.startsWith('TR') || norm.includes('RACK');
+}
+
+function getEffectiveMonthConfig(site: SiteData, planningMonth: number) {
+  const monthEntry = site.monthlyDepartmentData?.[planningMonth];
+  const snap = monthEntry?.snapshot;
+
+  return {
+    smtLines: snap?.smtLines ?? site.smtLines ?? [],
+    pcaLines: snap?.pcaLines ?? site.pcaLines ?? [],
+    cpuAssemblyLines: snap?.cpuAssemblyLines ?? site.cpuAssemblyLines ?? [],
+    rackAssemblyLines: snap?.rackAssemblyLines ?? site.rackAssemblyLines ?? [],
+    smtOfflineDL: snap?.smtOfflineDL ?? site.smtOfflineDL ?? 0,
+    pcaOfflineDL: snap?.pcaOfflineDL ?? site.pcaOfflineDL ?? 0,
+    assemblyOfflineDL: snap?.assemblyOfflineDL ?? site.assemblyOfflineDL ?? 0,
+    smtOfflineShift:
+      typeof (snap?.smtOfflineShift ?? site.smtOfflineShift) === 'number'
+        ? (snap?.smtOfflineShift ?? site.smtOfflineShift)!
+        : 2,
+    pcaOfflineShift:
+      typeof (snap?.pcaOfflineShift ?? site.pcaOfflineShift) === 'number'
+        ? (snap?.pcaOfflineShift ?? site.pcaOfflineShift)!
+        : 2,
+    assemblyOfflineShift:
+      typeof (snap?.assemblyOfflineShift ?? site.assemblyOfflineShift) === 'number'
+        ? (snap?.assemblyOfflineShift ?? site.assemblyOfflineShift)!
+        : 2,
+    smtIdl: snap?.smtIdl ?? site.smtIdl ?? 0,
+    pcaIdl: snap?.pcaIdl ?? site.pcaIdl ?? 0,
+    assemblyIdl: snap?.assemblyIdl ?? site.assemblyIdl ?? 0,
+    qc: snap?.qualityControl ?? site.qualityControl,
+    ts: snap?.troubleShooting ?? site.troubleShooting,
+    wh: snap?.warehouse ?? site.warehouse,
+    os: snap?.otherSupport ?? site.otherSupport,
+    monthEntry,
+  };
+}
+
+function resolveSupportManpower(cfg: ReturnType<typeof getEffectiveMonthConfig>) {
+  const { qc, ts, wh, os } = cfg;
+
+  const qcDL =
+    qc?.items && qc.items.length > 0
+      ? qc.items.reduce(
+          (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+          0
+        )
+      : (qc?.pqcDL || 0) + (qc?.oqcStandardDL || qc?.oqcDL || 0);
+
+  const qcIDL =
+    qc?.items && qc.items.length > 0
+      ? qc.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+      : (qc?.pqcIDL !== undefined
+          ? qc.pqcIDL
+          : (qc?.pqcDayShift || 0) + (qc?.pqcNightShift || 0)) +
+        (qc?.oqcIndirectIDL || qc?.oqcIDL || 0);
+
+  const tsDL =
+    ts?.items && ts.items.length > 0
+      ? ts.items.reduce(
+          (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+          0
+        )
+      : (ts?.dlEntry || 0);
+
+  const tsIDL =
+    ts?.items && ts.items.length > 0
+      ? ts.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+      : (ts?.idlEntry || 0);
+
+  const whDL =
+    wh?.items && wh.items.length > 0
+      ? wh.items.reduce(
+          (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+          0
+        )
+      : (wh?.logisticsDL || 0);
+
+  const whIDL =
+    wh?.items && wh.items.length > 0
+      ? wh.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+      : (wh?.adminIDL || 0);
+
+  const otherSupportDL =
+    os?.items && os.items.length > 0
+      ? os.items.reduce(
+          (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+          0
+        )
+      : (os?.dl || 0);
+
+  const otherIDL =
+    os?.items && os.items.length > 0
+      ? os.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+      : (os?.generalIDL || 0);
+
+  return {
+    qcDL,
+    qcIDL,
+    tsDL,
+    tsIDL,
+    whDL,
+    whIDL,
+    otherSupportDL,
+    otherIDL,
+  };
+}
+
+function computeSmtPcaScheduleBaseline(planningMonth: number) {
+  const mFactor = SMT_MONTH_FACTORS[planningMonth] ?? 1.0;
+
+  // Collect all active production dates in the August SMT/PCA schedule
+  const activeDatesSet = new Set<string>();
+  for (const pair of AUGUST_SMT_LINE_SUMMARIES) {
+    for (const [dt, d] of Object.entries(pair.daily)) {
+      if ((d.shifts || 0) > 0) {
+        activeDatesSet.add(dt);
+      }
+    }
+  }
+  const activeDates = Array.from(activeDatesSet);
+  const activeDays = activeDates.length || 22;
+
+  let totalFloorShifts = 0;
+  let totalLineShifts = 0;
+  const lineShiftSums: Record<string, number> = {};
+
+  for (const pair of AUGUST_SMT_LINE_SUMMARIES) {
+    lineShiftSums[pair.smtLine] = 0;
+  }
+
+  for (const dt of activeDates) {
+    let hasDay = false;
+    let hasNight = false;
+    for (const pair of AUGUST_SMT_LINE_SUMMARIES) {
+      const d = pair.daily[dt];
+      if (d && d.shifts > 0) {
+        if (d.hasDay) hasDay = true;
+        if (d.hasNight) hasNight = true;
+        totalLineShifts += d.shifts;
+        lineShiftSums[pair.smtLine] += d.shifts;
+      }
+    }
+    totalFloorShifts += (hasDay ? 1 : 0) + (hasNight ? 1 : 0);
+  }
+
+  const avgFloorShifts = Math.min(2, (totalFloorShifts / activeDays) * mFactor);
+  const avgLineShifts = (totalLineShifts / activeDays) * mFactor;
+
+  return {
+    activeDates,
+    activeDays,
+    mFactor,
+    avgFloorShifts,
+    avgLineShifts,
+    lineShiftSums,
+  };
+}
+
+function computeAssyScheduleBaseline(planningMonth: number) {
+  const mFactor = SMT_MONTH_FACTORS[planningMonth] ?? 1.0;
+  // Months 1..8 have direct master schedules; Months 9..12 project from latest full-month baseline (Month 7)
+  const hasDirectMonth = Boolean(APS_MASTER_MONTHS[planningMonth]);
+  const masterMonth = hasDirectMonth ? planningMonth : 7;
+  const scale = hasDirectMonth ? 1.0 : mFactor / (SMT_MONTH_FACTORS[7] || 1.06);
+  const masterData = APS_MASTER_MONTHS[masterMonth] || APS_MASTER_MONTHS[8];
+
+  const activeDatesSet = new Set<string>();
+  for (const l of masterData.lines) {
+    for (const [dt, d] of Object.entries(l.daily)) {
+      if ((d.shiftsActive || 0) > 0 || (d.totalQty || 0) > 0) {
+        activeDatesSet.add(dt);
+      }
+    }
+  }
+  const activeDates = Array.from(activeDatesSet);
+  const activeDays = activeDates.length || masterData.workingDays || 22;
+
+  let totalFloorShifts = 0;
+  let cpuLineShifts = 0;
+  let rackLineShifts = 0;
+  let cpuLinesCount = 0;
+  let rackLinesCount = 0;
+
+  for (const l of masterData.lines) {
+    if (isRackLineName(l.line)) rackLinesCount++;
+    else cpuLinesCount++;
+  }
+
+  for (const dt of activeDates) {
+    let hasDay = false;
+    let hasNight = false;
+    for (const l of masterData.lines) {
+      const d = l.daily[dt];
+      const sh = d?.shiftsActive || (d?.totalQty > 0 ? 1 : 0);
+      if (sh > 0) {
+        if (d?.hasDay) hasDay = true;
+        if (d?.hasNight) hasNight = true;
+        if (isRackLineName(l.line)) rackLineShifts += sh;
+        else cpuLineShifts += sh;
+      }
+    }
+    totalFloorShifts += (hasDay ? 1 : 0) + (hasNight ? 1 : 0);
+  }
+
+  const avgFloorShifts = Math.min(2, (totalFloorShifts / activeDays) * scale);
+  const avgCpuLineShifts = (cpuLineShifts / activeDays) * scale;
+  const avgRackLineShifts = (rackLineShifts / activeDays) * scale;
+
+  return {
+    masterLines: masterData.lines,
+    activeDates,
+    activeDays,
+    scale,
+    avgFloorShifts,
+    avgCpuLineShifts,
+    avgRackLineShifts,
+    cpuLinesCount: cpuLinesCount || 6,
+    rackLinesCount: rackLinesCount || 2,
+  };
+}
+
 export function generateMonthlyApsPlan(
   site: SiteData,
   planningYear: number,
   planningMonth: number
 ): MonthlyApsPlan {
   const { targetYear, targetMonth } = getNextMonthPeriod(planningYear, planningMonth);
+  const cfg = getEffectiveMonthConfig(site, planningMonth);
+
+  const isTaoPlant = site.id === 'tao' || site.code === 'TAO';
+
+  const smtPcaBase = computeSmtPcaScheduleBaseline(planningMonth);
+  const assyBase = computeAssyScheduleBaseline(planningMonth);
 
   const lines: DailyLineSchedule[] = [];
 
-  // 1. SMT Lines
-  (site.smtLines || []).forEach((line) => {
-    const shiftCount = typeof line.shift === 'number' ? line.shift : 2;
-    const stdDL = line.onlineStdDL || 0;
-    lines.push({
-      lineId: line.id,
-      lineName: line.name,
-      process: 'SMT',
-      category: line.category,
-      ieStdDLPerShift: stdDL,
-      dailyShifts: shiftCount,
-      dailyRequiredDL: stdDL * shiftCount,
-      shiftDetails: `${shiftCount} shifts/day (${
-        shiftCount === 0
-          ? 'Offline'
-          : shiftCount === 1
-          ? 'Day Shift'
-          : shiftCount === 2
-          ? 'Day & Night Shifts'
-          : shiftCount === 3
-          ? '3 Continuous Shifts'
-          : '4 Shifts / 24-7'
-      })`,
-      daysActiveInMonth: shiftCount > 0 ? 22 : 0,
-    });
-  });
+  // Calculate IE Capacities for this site
+  const smtIeCapacityShifts = cfg.smtLines.reduce(
+    (sum, l) => sum + (typeof l.shift === 'number' ? l.shift : 2),
+    0
+  );
+  const pcaIeCapacityShifts = cfg.pcaLines.reduce(
+    (sum, l) => sum + Math.max(l.faShift ?? 1, l.testShift ?? 1, l.packingShift ?? 1),
+    0
+  );
+  let cpuIeCapacityShifts = cfg.cpuAssemblyLines.reduce(
+    (sum, l) => sum + (typeof l.assyShift === 'number' ? l.assyShift : (typeof l.shift === 'number' ? l.shift : 2)),
+    0
+  );
+  let rackIeCapacityShifts = cfg.rackAssemblyLines.reduce(
+    (sum, l) => sum + (typeof l.assyShift === 'number' ? l.assyShift : (typeof l.shift === 'number' ? l.shift : 2)),
+    0
+  );
 
-  // 2. PCA Lines
-  (site.pcaLines || []).forEach((line) => {
-    const shiftCount = typeof line.faShift === 'number' ? line.faShift : (typeof line.shift === 'number' ? line.shift : 2);
-    const stdDL = (line.faStdDL || 0) + (line.testStdDL || 0) + (line.packingStdDL || 0);
-    lines.push({
-      lineId: line.id,
-      lineName: line.name,
-      process: 'PCA',
-      category: line.category,
-      ieStdDLPerShift: stdDL,
-      dailyShifts: shiftCount,
-      dailyRequiredDL: stdDL * shiftCount,
-      shiftDetails: `${shiftCount} shifts/day (FA + Test + Pack)`,
-      daysActiveInMonth: shiftCount > 0 ? 22 : 0,
-    });
-  });
+  // TAO baseline schedule operation ratios (for scaling non-TAO sites without individual APS tables)
+  const taoSmtCapacityRef = 21; // S21..S73 IE capacity shifts
+  const smtOpRate = Math.min(1, smtPcaBase.avgLineShifts / taoSmtCapacityRef);
 
-  // 3. System Assembly Lines (CPU組裝 + Rack組裝)
-  (site.cpuAssemblyLines || []).forEach((line) => {
-    const shiftCount = typeof line.assyShift === 'number' ? line.assyShift : (typeof line.shift === 'number' ? line.shift : 2);
-    const stdDL = (line.assyDL || 0) + (line.testDL || 0) + (line.packDL || 0);
-    lines.push({
-      lineId: line.id,
-      lineName: line.name,
-      process: 'System Assembly',
-      ieStdDLPerShift: stdDL,
-      dailyShifts: shiftCount,
-      dailyRequiredDL: stdDL * shiftCount,
-      shiftDetails: `${shiftCount} shifts/day (Assembly + Test + Pack)`,
-      daysActiveInMonth: shiftCount > 0 ? 22 : 0,
-    });
-  });
+  const cpuCapRef = Math.max(1, assyBase.cpuLinesCount * 2);
+  const rackCapRef = Math.max(1, assyBase.rackLinesCount * 2);
+  const cpuOpRate = Math.min(1, assyBase.avgCpuLineShifts / cpuCapRef);
+  const rackOpRate = Math.min(1, assyBase.avgRackLineShifts / rackCapRef);
 
-  (site.rackAssemblyLines || []).forEach((line) => {
-    const shiftCount = typeof line.assyShift === 'number' ? line.assyShift : (typeof line.shift === 'number' ? line.shift : 2);
-    const stdDL = (line.assyDL || 0) + (line.testDL || 0) + (line.packDL || 0);
-    lines.push({
-      lineId: line.id,
-      lineName: line.name,
-      process: 'System Assembly',
-      ieStdDLPerShift: stdDL,
-      dailyShifts: shiftCount,
-      dailyRequiredDL: stdDL * shiftCount,
-      shiftDetails: `${shiftCount} shifts/day (Assembly + Test + Pack)`,
-      daysActiveInMonth: shiftCount > 0 ? 22 : 0,
-    });
-  });
+  let smtAvgActiveLineShifts = 0;
+  let pcaAvgActiveLineShifts = 0;
+  let cpuAvgActiveLineShifts = 0;
+  let rackAvgActiveLineShifts = 0;
 
-  const smtOnlineDL = lines
-    .filter((l) => l.process === 'SMT')
-    .reduce((sum, l) => sum + l.dailyRequiredDL, 0);
+  let smtOnlineRaw = 0;
+  let pcaOnlineRaw = 0;
+  let assemblyOnlineRaw = 0;
 
-  const pcaOnlineDL = lines
-    .filter((l) => l.process === 'PCA')
-    .reduce((sum, l) => sum + l.dailyRequiredDL, 0);
+  if (isTaoPlant) {
+    // 1. SMT Lines — directly driven by APS daily SMT schedule × IE Standard DL
+    const matchedSmtIds = new Set<string>();
+    for (const pair of AUGUST_SMT_LINE_SUMMARIES) {
+      const targetNorm = normalizeLineCode(pair.smtLine);
+      const ieLine = cfg.smtLines.find((l) => {
+        const lNorm = normalizeLineCode(l.name);
+        return lNorm === targetNorm || lNorm.includes(targetNorm) || targetNorm.includes(lNorm);
+      });
+      if (ieLine) matchedSmtIds.add(ieLine.id);
 
-  const assemblyOnlineDL = lines
-    .filter((l) => l.process === 'System Assembly')
-    .reduce((sum, l) => sum + l.dailyRequiredDL, 0);
+      const ieShift = ieLine ? (typeof ieLine.shift === 'number' ? ieLine.shift : 2) : 2;
+      const stdDL = ieLine ? ieLine.onlineStdDL || 0 : pair.smtStdDL;
 
+      let sumDayDL = 0;
+      let sumShifts = 0;
+      let lineActiveDays = 0;
+
+      for (const dt of smtPcaBase.activeDates) {
+        const apsShifts = pair.daily[dt]?.shifts || 0;
+        if (apsShifts > 0) {
+          const effShifts = Math.min(apsShifts, ieShift);
+          if (effShifts > 0) {
+            lineActiveDays++;
+            sumShifts += effShifts;
+            sumDayDL += stdDL * effShifts;
+          }
+        }
+      }
+
+      const avgDailyShifts = (sumShifts / smtPcaBase.activeDays) * smtPcaBase.mFactor;
+      const avgDailyDL = (sumDayDL / smtPcaBase.activeDays) * smtPcaBase.mFactor;
+      smtAvgActiveLineShifts += avgDailyShifts;
+      smtOnlineRaw += avgDailyDL;
+
+      lines.push({
+        lineId: ieLine?.id || `aps-smt-${pair.smtLine}`,
+        lineName: ieLine?.name || `Line-${pair.smtLine}`,
+        process: 'SMT',
+        category: ieLine?.category || 'MB',
+        ieStdDLPerShift: stdDL,
+        dailyShifts: Number(avgDailyShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDailyDL),
+        shiftDetails: `APS Avg ${avgDailyShifts.toFixed(2)} sh/day (${lineActiveDays}/${smtPcaBase.activeDays} active days)`,
+        daysActiveInMonth: lineActiveDays,
+      });
+    }
+
+    // Any extra custom SMT lines added by IE beyond S21..S73
+    for (const ieLine of cfg.smtLines) {
+      if (matchedSmtIds.has(ieLine.id)) continue;
+      const ieShift = typeof ieLine.shift === 'number' ? ieLine.shift : 2;
+      const avgDailyShifts = ieShift * smtOpRate;
+      const avgDailyDL = (ieLine.onlineStdDL || 0) * avgDailyShifts;
+      smtAvgActiveLineShifts += avgDailyShifts;
+      smtOnlineRaw += avgDailyDL;
+      lines.push({
+        lineId: ieLine.id,
+        lineName: ieLine.name,
+        process: 'SMT',
+        category: ieLine.category,
+        ieStdDLPerShift: ieLine.onlineStdDL || 0,
+        dailyShifts: Number(avgDailyShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDailyDL),
+        shiftDetails: `APS Ratio ${avgDailyShifts.toFixed(2)} sh/day`,
+        daysActiveInMonth: avgDailyShifts > 0 ? smtPcaBase.activeDays : 0,
+      });
+    }
+
+    // 2. PCA Lines — continuous with SMT schedule × station-level IE Standard DL (FA + Test + Pack)
+    const matchedPcaIds = new Set<string>();
+    for (const pair of AUGUST_SMT_LINE_SUMMARIES) {
+      const targetNorm = normalizeLineCode(pair.pcaLine);
+      const ieLine = cfg.pcaLines.find((l) => {
+        const lNorm = normalizeLineCode(l.name);
+        return lNorm === targetNorm || lNorm.includes(targetNorm) || targetNorm.includes(lNorm);
+      });
+      if (ieLine) matchedPcaIds.add(ieLine.id);
+
+      const faShift = ieLine ? (typeof ieLine.faShift === 'number' ? ieLine.faShift : 2) : 2;
+      const testShift = ieLine ? (typeof ieLine.testShift === 'number' ? ieLine.testShift : 2) : 2;
+      const packShift = ieLine ? (typeof ieLine.packingShift === 'number' ? ieLine.packingShift : 2) : 2;
+
+      const faDL = ieLine ? ieLine.faStdDL || 0 : Math.round(pair.pcaStdDL * 0.45);
+      const testDL = ieLine ? ieLine.testStdDL || 0 : Math.round(pair.pcaStdDL * 0.35);
+      const packDL = ieLine ? ieLine.packingStdDL || 0 : Math.max(0, pair.pcaStdDL - faDL - testDL);
+
+      let sumDayDL = 0;
+      let sumShifts = 0;
+      let lineActiveDays = 0;
+
+      for (const dt of smtPcaBase.activeDates) {
+        const apsShifts = pair.daily[dt]?.shifts || 0;
+        if (apsShifts > 0) {
+          const lineMaxShift = Math.max(faShift, testShift, packShift);
+          const effShifts = Math.min(apsShifts, lineMaxShift);
+          if (effShifts > 0) {
+            lineActiveDays++;
+            sumShifts += effShifts;
+            sumDayDL +=
+              faDL * Math.min(apsShifts, faShift) +
+              testDL * Math.min(apsShifts, testShift) +
+              packDL * Math.min(apsShifts, packShift);
+          }
+        }
+      }
+
+      const avgDailyShifts = (sumShifts / smtPcaBase.activeDays) * smtPcaBase.mFactor;
+      const avgDailyDL = (sumDayDL / smtPcaBase.activeDays) * smtPcaBase.mFactor;
+      pcaAvgActiveLineShifts += avgDailyShifts;
+      pcaOnlineRaw += avgDailyDL;
+
+      const effStdPerShift = avgDailyShifts > 0 ? avgDailyDL / avgDailyShifts : faDL + testDL + packDL;
+
+      lines.push({
+        lineId: ieLine?.id || `aps-pca-${pair.pcaLine}`,
+        lineName: ieLine?.name || `Line-${pair.pcaLine}`,
+        process: 'PCA',
+        category: ieLine?.category || 'MB',
+        ieStdDLPerShift: Math.round(effStdPerShift * 10) / 10,
+        dailyShifts: Number(avgDailyShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDailyDL),
+        shiftDetails: `APS Continuous ${avgDailyShifts.toFixed(2)} sh/day (FA+Test+Pack)`,
+        daysActiveInMonth: lineActiveDays,
+      });
+    }
+
+    for (const ieLine of cfg.pcaLines) {
+      if (matchedPcaIds.has(ieLine.id)) continue;
+      const faSh = (ieLine.faShift ?? 2) * smtOpRate;
+      const testSh = (ieLine.testShift ?? 2) * smtOpRate;
+      const packSh = (ieLine.packingShift ?? 2) * smtOpRate;
+      const avgDailyDL =
+        (ieLine.faStdDL || 0) * faSh +
+        (ieLine.testStdDL || 0) * testSh +
+        (ieLine.packingStdDL || 0) * packSh;
+      const avgShifts = Math.max(faSh, testSh, packSh);
+      pcaAvgActiveLineShifts += avgShifts;
+      pcaOnlineRaw += avgDailyDL;
+      lines.push({
+        lineId: ieLine.id,
+        lineName: ieLine.name,
+        process: 'PCA',
+        category: ieLine.category,
+        ieStdDLPerShift: (ieLine.faStdDL || 0) + (ieLine.testStdDL || 0) + (ieLine.packingStdDL || 0),
+        dailyShifts: Number(avgShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDailyDL),
+        shiftDetails: `APS Ratio ${avgShifts.toFixed(2)} sh/day`,
+        daysActiveInMonth: avgShifts > 0 ? smtPcaBase.activeDays : 0,
+      });
+    }
+
+    // 3. System Assembly Lines (CPU + RACK) — directly driven by APS_MASTER_MONTHS daily schedule
+    const allIeAssyLines = [...cfg.cpuAssemblyLines, ...cfg.rackAssemblyLines];
+    const matchedAssyIds = new Set<string>();
+
+    for (const masterLine of assyBase.masterLines) {
+      const mNorm = masterLine.line.toUpperCase().trim();
+      const isRack = isRackLineName(masterLine.line);
+      const ieLine = allIeAssyLines.find((l) => {
+        const lNorm = l.name.toUpperCase();
+        return lNorm.includes(mNorm) || mNorm.includes(lNorm);
+      });
+      if (ieLine) matchedAssyIds.add(ieLine.id);
+
+      if (!ieLine) {
+        if (isRack) rackIeCapacityShifts += 2;
+        else cpuIeCapacityShifts += 2;
+      }
+
+      let sumDayDL = 0;
+      let sumShifts = 0;
+      let lineActiveDays = 0;
+
+      for (const dt of assyBase.activeDates) {
+        const d = masterLine.daily[dt];
+        const apsShifts = d?.shiftsActive || (d?.totalQty > 0 ? 1 : 0);
+        if (apsShifts > 0) {
+          if (ieLine) {
+            const assySh = typeof ieLine.assyShift === 'number' ? ieLine.assyShift : 2;
+            const testSh = typeof ieLine.testShift === 'number' ? ieLine.testShift : 2;
+            const packSh = typeof ieLine.packShift === 'number' ? ieLine.packShift : 1;
+            const lineMaxSh = Math.max(assySh, testSh, packSh);
+            const effShifts = Math.min(apsShifts, lineMaxSh);
+            if (effShifts > 0) {
+              lineActiveDays++;
+              sumShifts += effShifts;
+              sumDayDL +=
+                (ieLine.assyDL || 0) * Math.min(apsShifts, assySh) +
+                (ieLine.testDL || 0) * Math.min(apsShifts, testSh) +
+                (ieLine.packDL || 0) * Math.min(apsShifts, packSh);
+            }
+          } else {
+            lineActiveDays++;
+            sumShifts += apsShifts;
+            sumDayDL += getLineIeStandardDL(site, masterLine.line) * apsShifts;
+          }
+        }
+      }
+
+      const avgDailyShifts = (sumShifts / assyBase.activeDays) * assyBase.scale;
+      const avgDailyDL = (sumDayDL / assyBase.activeDays) * assyBase.scale;
+      if (isRack) rackAvgActiveLineShifts += avgDailyShifts;
+      else cpuAvgActiveLineShifts += avgDailyShifts;
+      assemblyOnlineRaw += avgDailyDL;
+
+      const fallbackStd = ieLine
+        ? (ieLine.assyDL || 0) + (ieLine.testDL || 0) + (ieLine.packDL || 0)
+        : getLineIeStandardDL(site, masterLine.line);
+      const effStdPerShift = avgDailyShifts > 0 ? avgDailyDL / avgDailyShifts : fallbackStd;
+
+      lines.push({
+        lineId: ieLine?.id || `aps-assy-${masterLine.line}`,
+        lineName: ieLine?.name || `Line-${masterLine.line}`,
+        process: 'System Assembly',
+        ieStdDLPerShift: Math.round(effStdPerShift * 10) / 10,
+        dailyShifts: Number(avgDailyShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDailyDL),
+        shiftDetails: `APS Avg ${avgDailyShifts.toFixed(2)} sh/day (${lineActiveDays}/${assyBase.activeDays} active days)`,
+        daysActiveInMonth: lineActiveDays,
+      });
+    }
+
+    // Also include unmatched IE assembly lines (only if IE added custom lines not in APS master)
+    for (const ieLine of allIeAssyLines) {
+      if (matchedAssyIds.has(ieLine.id)) continue;
+      // R02 in TAO is an unscheduled standby line unless scheduled in APS
+      const isStandbyR02 = normalizeLineCode(ieLine.name).includes('R02');
+      if (isStandbyR02) {
+        lines.push({
+          lineId: ieLine.id,
+          lineName: ieLine.name,
+          process: 'System Assembly',
+          ieStdDLPerShift: (ieLine.assyDL || 0) + (ieLine.testDL || 0) + (ieLine.packDL || 0),
+          dailyShifts: 0,
+          dailyRequiredDL: 0,
+          shiftDetails: 'Not scheduled in APS daily plan (0 sh/day)',
+          daysActiveInMonth: 0,
+        });
+      }
+    }
+  } else {
+    // Non-TAO individual plants: apply APS schedule shift operation rates to each plant's IE lines & stations
+    for (const line of cfg.smtLines) {
+      const ieShift = typeof line.shift === 'number' ? line.shift : 2;
+      const avgShifts = ieShift * smtOpRate;
+      const avgDL = (line.onlineStdDL || 0) * avgShifts;
+      smtAvgActiveLineShifts += avgShifts;
+      smtOnlineRaw += avgDL;
+      lines.push({
+        lineId: line.id,
+        lineName: line.name,
+        process: 'SMT',
+        category: line.category,
+        ieStdDLPerShift: line.onlineStdDL || 0,
+        dailyShifts: Number(avgShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDL),
+        shiftDetails: `APS Ratio ${avgShifts.toFixed(2)} sh/day`,
+        daysActiveInMonth: avgShifts > 0 ? smtPcaBase.activeDays : 0,
+      });
+    }
+
+    for (const line of cfg.pcaLines) {
+      const faShift = typeof line.faShift === 'number' ? line.faShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const testShift = typeof line.testShift === 'number' ? line.testShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const packShift = typeof line.packingShift === 'number' ? line.packingShift : (typeof line.shift === 'number' ? line.shift : 2);
+
+      const avgDL =
+        (line.faStdDL || 0) * faShift * smtOpRate +
+        (line.testStdDL || 0) * testShift * smtOpRate +
+        (line.packingStdDL || 0) * packShift * smtOpRate;
+      const avgShifts = Math.max(faShift, testShift, packShift) * smtOpRate;
+      pcaAvgActiveLineShifts += avgShifts;
+      pcaOnlineRaw += avgDL;
+
+      const stdSum = (line.faStdDL || 0) + (line.testStdDL || 0) + (line.packingStdDL || 0);
+      lines.push({
+        lineId: line.id,
+        lineName: line.name,
+        process: 'PCA',
+        category: line.category,
+        ieStdDLPerShift: stdSum,
+        dailyShifts: Number(avgShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDL),
+        shiftDetails: `APS Ratio ${avgShifts.toFixed(2)} sh/day (FA+Test+Pack)`,
+        daysActiveInMonth: avgShifts > 0 ? smtPcaBase.activeDays : 0,
+      });
+    }
+
+    for (const line of cfg.cpuAssemblyLines) {
+      const assyShift = typeof line.assyShift === 'number' ? line.assyShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const testShift = typeof line.testShift === 'number' ? line.testShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const packShift = typeof line.packShift === 'number' ? line.packShift : (typeof line.shift === 'number' ? line.shift : 1);
+
+      const avgDL =
+        (line.assyDL || 0) * assyShift * cpuOpRate +
+        (line.testDL || 0) * testShift * cpuOpRate +
+        (line.packDL || 0) * packShift * cpuOpRate;
+      const avgShifts = assyShift * cpuOpRate;
+      cpuAvgActiveLineShifts += avgShifts;
+      assemblyOnlineRaw += avgDL;
+
+      lines.push({
+        lineId: line.id,
+        lineName: line.name,
+        process: 'System Assembly',
+        ieStdDLPerShift: (line.assyDL || 0) + (line.testDL || 0) + (line.packDL || 0),
+        dailyShifts: Number(avgShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDL),
+        shiftDetails: `APS Ratio ${avgShifts.toFixed(2)} sh/day (Assy+Test+Pack)`,
+        daysActiveInMonth: avgShifts > 0 ? assyBase.activeDays : 0,
+      });
+    }
+
+    for (const line of cfg.rackAssemblyLines) {
+      const assyShift = typeof line.assyShift === 'number' ? line.assyShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const testShift = typeof line.testShift === 'number' ? line.testShift : (typeof line.shift === 'number' ? line.shift : 2);
+      const packShift = typeof line.packShift === 'number' ? line.packShift : (typeof line.shift === 'number' ? line.shift : 1);
+
+      const avgDL =
+        (line.assyDL || 0) * assyShift * rackOpRate +
+        (line.testDL || 0) * testShift * rackOpRate +
+        (line.packDL || 0) * packShift * rackOpRate;
+      const avgShifts = assyShift * rackOpRate;
+      rackAvgActiveLineShifts += avgShifts;
+      assemblyOnlineRaw += avgDL;
+
+      lines.push({
+        lineId: line.id,
+        lineName: line.name,
+        process: 'System Assembly',
+        ieStdDLPerShift: (line.assyDL || 0) + (line.testDL || 0) + (line.packDL || 0),
+        dailyShifts: Number(avgShifts.toFixed(2)),
+        dailyRequiredDL: Math.round(avgDL),
+        shiftDetails: `APS Ratio ${avgShifts.toFixed(2)} sh/day (Assy+Test+Pack)`,
+        daysActiveInMonth: avgShifts > 0 ? assyBase.activeDays : 0,
+      });
+    }
+  }
+
+  const smtOnlineDL = Math.round(smtOnlineRaw);
+  const pcaOnlineDL = Math.round(pcaOnlineRaw);
+  const assemblyOnlineDL = Math.round(assemblyOnlineRaw);
   const totalOnlineDL = smtOnlineDL + pcaOnlineDL + assemblyOnlineDL;
 
-  const totalOfflineDL =
-    (site.smtOfflineDL || 0) + (site.pcaOfflineDL || 0) + (site.assemblyOfflineDL || 0);
+  // 4. Manufacturing Offline DL:
+  //    (Offline DL / Offline Shift) = Avg Offline DL per shift
+  //    Scheduled Offline DL = Avg Offline DL per shift × Scheduled Daily Avg Active Floor Shifts
+  const smtOfflinePerShift = cfg.smtOfflineShift > 0 ? cfg.smtOfflineDL / cfg.smtOfflineShift : 0;
+  const pcaOfflinePerShift = cfg.pcaOfflineShift > 0 ? cfg.pcaOfflineDL / cfg.pcaOfflineShift : 0;
+  const assyOfflinePerShift = cfg.assemblyOfflineShift > 0 ? cfg.assemblyOfflineDL / cfg.assemblyOfflineShift : 0;
 
+  const smtScheduledOfflineDL = Math.round(
+    (cfg.smtOfflineShift > 0 ? smtOfflinePerShift * smtPcaBase.avgFloorShifts : 0)
+  );
+  const pcaScheduledOfflineDL = Math.round(
+    (cfg.pcaOfflineShift > 0 ? pcaOfflinePerShift * smtPcaBase.avgFloorShifts : 0)
+  );
+  const assyScheduledOfflineDL = Math.round(
+    (cfg.assemblyOfflineShift > 0 ? assyOfflinePerShift * assyBase.avgFloorShifts : 0)
+  );
+
+  const totalOfflineDL = smtScheduledOfflineDL + pcaScheduledOfflineDL + assyScheduledOfflineDL;
+
+  // 5. Quality & Support Departments DL & IDL
+  const support = resolveSupportManpower(cfg);
   const totalSupportDL =
-    (site.qualityControl?.pqcDL || 0) +
-    (site.qualityControl?.oqcStandardDL || 0) +
-    (site.troubleShooting?.dlEntry || 0) +
-    (site.warehouse?.logisticsDL || 0) +
-    (site.otherSupport?.dl || 0);
+    support.qcDL + support.tsDL + support.whDL + support.otherSupportDL;
 
   const totalApsDemandDL = totalOnlineDL + totalOfflineDL + totalSupportDL;
 
-  // Fixed IDL from IE Standard configuration (Constant across capacity changes)
-  const monthData = site.monthlyDepartmentData?.[planningMonth];
-  const mfgIDL =
-    monthData?.mfgIDL ??
-    ((site.smtIdl || 0) + (site.pcaIdl || 0) + (site.assemblyIdl || 0));
-
+  // 6. Manufacturing & Support IDL
+  const mfgIDL = cfg.smtIdl + cfg.pcaIdl + cfg.assemblyIdl;
   const supportIDL =
-    (monthData?.qcIDL ?? ((site.qualityControl?.pqcIDL || 0) + (site.qualityControl?.oqcIndirectIDL || 0))) +
-    (monthData?.tsIDL ?? (site.troubleShooting?.idlEntry || 0)) +
-    (monthData?.whIDL ?? (site.warehouse?.adminIDL || 0)) +
-    (monthData?.otherIDL ?? (site.otherSupport?.generalIDL || 0));
-
-  const fixedIDL = monthData?.totalIDL ?? (mfgIDL + supportIDL);
+    support.qcIDL + support.tsIDL + support.whIDL + support.otherIDL;
+  const fixedIDL = mfgIDL + supportIDL;
   const totalDemandHeadcount = totalApsDemandDL + fixedIDL;
 
   return {
@@ -274,7 +810,7 @@ export function generateMonthlyApsPlan(
     targetYear,
     targetMonth,
     cycleWeek: 'W3 Update (Published 3rd Week Monthly)',
-    workingDays: 22,
+    workingDays: assyBase.activeDays,
     lines,
     smtOnlineDL,
     pcaOnlineDL,
@@ -287,6 +823,132 @@ export function generateMonthlyApsPlan(
     mfgIDL,
     supportIDL,
     totalDemandHeadcount,
+    smtOfflineDL: smtScheduledOfflineDL,
+    pcaOfflineDL: pcaScheduledOfflineDL,
+    assemblyOfflineDL: assyScheduledOfflineDL,
+    qcDL: support.qcDL,
+    tsDL: support.tsDL,
+    whDL: support.whDL,
+    otherSupportDL: support.otherSupportDL,
+    scheduleStats: {
+      smtActiveDays: smtPcaBase.activeDays,
+      smtAvgFloorShifts: smtPcaBase.avgFloorShifts,
+      smtAvgActiveLineShifts,
+      smtIeCapacityShifts,
+      pcaAvgActiveLineShifts,
+      pcaIeCapacityShifts,
+      assyActiveDays: assyBase.activeDays,
+      assyAvgFloorShifts: assyBase.avgFloorShifts,
+      cpuAvgActiveLineShifts,
+      cpuIeCapacityShifts,
+      rackAvgActiveLineShifts,
+      rackIeCapacityShifts,
+    },
+  };
+}
+
+export function generateOverallApsPlan(
+  sites: Record<string, SiteData>,
+  planningYear: number,
+  planningMonth: number
+): MonthlyApsPlan {
+  const { targetYear, targetMonth } = getNextMonthPeriod(planningYear, planningMonth);
+  const isInternalSubPlant = (s: SiteData) =>
+    s.id === 'tp08' ||
+    s.id === 'tp15' ||
+    s.id === 'tp16' ||
+    s.code === 'TP08' ||
+    s.code === 'TP15' ||
+    s.code === 'TP16';
+
+  const plantPlans = Object.values(sites)
+    .filter((s) => s.id !== 'overall' && !isInternalSubPlant(s))
+    .map((s) => ({
+      site: s,
+      plan: generateMonthlyApsPlan(s, planningYear, planningMonth),
+    }));
+
+  const smtOnlineDL = plantPlans.reduce((sum, p) => sum + p.plan.smtOnlineDL, 0);
+  const pcaOnlineDL = plantPlans.reduce((sum, p) => sum + p.plan.pcaOnlineDL, 0);
+  const assemblyOnlineDL = plantPlans.reduce((sum, p) => sum + p.plan.assemblyOnlineDL, 0);
+  const totalOnlineDL = smtOnlineDL + pcaOnlineDL + assemblyOnlineDL;
+
+  const smtOfflineDL = plantPlans.reduce((sum, p) => sum + (p.plan.smtOfflineDL || 0), 0);
+  const pcaOfflineDL = plantPlans.reduce((sum, p) => sum + (p.plan.pcaOfflineDL || 0), 0);
+  const assemblyOfflineDL = plantPlans.reduce((sum, p) => sum + (p.plan.assemblyOfflineDL || 0), 0);
+  const totalOfflineDL = smtOfflineDL + pcaOfflineDL + assemblyOfflineDL;
+
+  const qcDL = plantPlans.reduce((sum, p) => sum + (p.plan.qcDL || 0), 0);
+  const tsDL = plantPlans.reduce((sum, p) => sum + (p.plan.tsDL || 0), 0);
+  const whDL = plantPlans.reduce((sum, p) => sum + (p.plan.whDL || 0), 0);
+  const otherSupportDL = plantPlans.reduce((sum, p) => sum + (p.plan.otherSupportDL || 0), 0);
+  const totalSupportDL = qcDL + tsDL + whDL + otherSupportDL;
+
+  const totalApsDemandDL = totalOnlineDL + totalOfflineDL + totalSupportDL;
+  const mfgIDL = plantPlans.reduce((sum, p) => sum + p.plan.mfgIDL, 0);
+  const supportIDL = plantPlans.reduce((sum, p) => sum + p.plan.supportIDL, 0);
+  const fixedIDL = mfgIDL + supportIDL;
+  const totalDemandHeadcount = totalApsDemandDL + fixedIDL;
+
+  const lines: DailyLineSchedule[] = plantPlans.flatMap(({ site: s, plan }) =>
+    plan.lines.map((l) => ({
+      ...l,
+      lineId: `${s.id}-${l.lineId}`,
+      lineName: `[${s.code}] ${l.lineName}`,
+    }))
+  );
+
+  const smtAvgActiveLineShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.smtAvgActiveLineShifts || 0), 0);
+  const smtIeCapacityShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.smtIeCapacityShifts || 0), 0);
+  const pcaAvgActiveLineShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.pcaAvgActiveLineShifts || 0), 0);
+  const pcaIeCapacityShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.pcaIeCapacityShifts || 0), 0);
+  const cpuAvgActiveLineShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.cpuAvgActiveLineShifts || 0), 0);
+  const cpuIeCapacityShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.cpuIeCapacityShifts || 0), 0);
+  const rackAvgActiveLineShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.rackAvgActiveLineShifts || 0), 0);
+  const rackIeCapacityShifts = plantPlans.reduce((sum, p) => sum + (p.plan.scheduleStats?.rackIeCapacityShifts || 0), 0);
+
+  const firstStats = plantPlans[0]?.plan.scheduleStats;
+
+  return {
+    planningYear,
+    planningMonth,
+    targetYear,
+    targetMonth,
+    cycleWeek: 'W3 Update (Published 3rd Week Monthly)',
+    workingDays: firstStats?.assyActiveDays || 22,
+    lines,
+    smtOnlineDL,
+    pcaOnlineDL,
+    assemblyOnlineDL,
+    totalOnlineDL,
+    totalOfflineDL,
+    totalSupportDL,
+    totalApsDemandDL,
+    fixedIDL,
+    mfgIDL,
+    supportIDL,
+    totalDemandHeadcount,
+    smtOfflineDL,
+    pcaOfflineDL,
+    assemblyOfflineDL,
+    qcDL,
+    tsDL,
+    whDL,
+    otherSupportDL,
+    scheduleStats: {
+      smtActiveDays: firstStats?.smtActiveDays || 22,
+      smtAvgFloorShifts: firstStats?.smtAvgFloorShifts || 2,
+      smtAvgActiveLineShifts,
+      smtIeCapacityShifts,
+      pcaAvgActiveLineShifts,
+      pcaIeCapacityShifts,
+      assyActiveDays: firstStats?.assyActiveDays || 22,
+      assyAvgFloorShifts: firstStats?.assyAvgFloorShifts || 2,
+      cpuAvgActiveLineShifts,
+      cpuIeCapacityShifts,
+      rackAvgActiveLineShifts,
+      rackIeCapacityShifts,
+    },
   };
 }
 
@@ -372,32 +1034,32 @@ export function generateCostCenterPayrollData(
 ): CostCenterPayrollWeekly[] {
   // SMT Process Cost Centers
   const smtCC = parseCostCenters(site.smtCostCenter);
-  const smtApsDL = apsPlan.smtOnlineDL + (site.smtOfflineDL || 0);
+  const smtApsDL = apsPlan.smtOnlineDL + (apsPlan.smtOfflineDL ?? site.smtOfflineDL ?? 0);
   const rawSmtMonthEndDL = Math.round(smtApsDL * 1.02);
 
   // PCA Process Cost Centers
   const pcaCC = parseCostCenters(site.pcaCostCenter);
-  const pcaApsDL = apsPlan.pcaOnlineDL + (site.pcaOfflineDL || 0);
+  const pcaApsDL = apsPlan.pcaOnlineDL + (apsPlan.pcaOfflineDL ?? site.pcaOfflineDL ?? 0);
   const rawPcaMonthEndDL = Math.round(pcaApsDL * 0.97);
 
   // System Assembly Process Cost Centers
   const sysCC = parseCostCenters(site.assemblyCostCenter);
-  const sysApsDL = apsPlan.assemblyOnlineDL + (site.assemblyOfflineDL || 0);
+  const sysApsDL = apsPlan.assemblyOnlineDL + (apsPlan.assemblyOfflineDL ?? site.assemblyOfflineDL ?? 0);
   const rawSysMonthEndDL = Math.round(sysApsDL * 0.98);
 
   // Quality Control
   const qcCC = parseCostCenters(site.qualityControl?.oqcCostCenter);
-  const qcApsDL = (site.qualityControl?.pqcDL || 0) + (site.qualityControl?.oqcStandardDL || 0);
+  const qcApsDL = apsPlan.qcDL ?? ((site.qualityControl?.pqcDL || 0) + (site.qualityControl?.oqcStandardDL || 0));
   const rawQcMonthEndDL = qcApsDL;
 
   // Trouble Shooting
   const tsCC = ['CC-TS-7301'];
-  const tsApsDL = site.troubleShooting?.dlEntry || 0;
+  const tsApsDL = apsPlan.tsDL ?? (site.troubleShooting?.dlEntry || 0);
   const rawTsMonthEndDL = tsApsDL;
 
   // Warehouse Logistics
   const whCC = ['CC-WH-7401'];
-  const whApsDL = site.warehouse?.logisticsDL || 0;
+  const whApsDL = apsPlan.whDL ?? (site.warehouse?.logisticsDL || 0);
   const rawWhMonthEndDL = Math.max(0, whApsDL + 1);
 
   // Normalize department monthEndDL figures so their total matches site.actualHrDL exactly
@@ -720,29 +1382,16 @@ export function getMonthlyBudgetManpower(site: SiteData, month: number): {
 export function generate12MonthTrend(
   site: SiteData,
   selectedYear: number,
-  selectedMonth: number
+  selectedMonth: number,
+  allSites?: Record<string, SiteData>
 ) {
-  const basePlan = generateMonthlyApsPlan(site, selectedYear, selectedMonth);
+  const basePlan =
+    site.id === 'overall' && allSites
+      ? generateOverallApsPlan(allSites, selectedYear, selectedMonth)
+      : generateMonthlyApsPlan(site, selectedYear, selectedMonth);
   const baseApsDL = basePlan.totalApsDemandDL;
   const baseHrDL = site.actualHrDL || baseApsDL;
-
-  // Base IDL for site (Quality Control, Troubleshooting, Warehouse, Other Support & segment IDLs)
-  const qcIdlSum =
-    (site.qualityControl?.pqcIDL !== undefined
-      ? site.qualityControl.pqcIDL
-      : (site.qualityControl?.pqcDayShift || 0) + (site.qualityControl?.pqcNightShift || 0)) +
-    (site.qualityControl?.oqcIndirectIDL || 0);
-  const tsIdl = site.troubleShooting?.idlEntry || 0;
-  const whIdl = site.warehouse?.adminIDL || 0;
-  const osIdl = site.otherSupport?.generalIDL || 0;
-  const baseApsIDL =
-    (site.smtIdl || 0) +
-    (site.pcaIdl || 0) +
-    (site.assemblyIdl || 0) +
-    qcIdlSum +
-    tsIdl +
-    whIdl +
-    osIdl;
+  const baseApsIDL = basePlan.fixedIDL;
   const baseHrIDL = site.actualHrIDL !== undefined ? site.actualHrIDL : baseApsIDL;
 
   // Real operational monthly variations based on master APS production plan schedule (Jan - Aug 2026 CPU Assembly)

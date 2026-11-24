@@ -1,11 +1,13 @@
 import React from 'react';
 import { CalculatedMetrics } from '../utils/calculations';
-import { SiteData, ViewTab } from '../types';
+import { MonthlyApsPlan, SiteData, ViewTab } from '../types';
 import { getMonthlyApsVolumes, getMonthlyBudgetManpower } from '../utils/apsSchedule';
 
 interface SummaryCardsProps {
   metrics: CalculatedMetrics;
   apsDemandDL?: number;
+  apsDemandIDL?: number;
+  apsPlan?: MonthlyApsPlan;
   hrActualDL?: number;
   selectedYear?: number;
   selectedMonth?: number;
@@ -102,6 +104,8 @@ const CircularMetricGauge: React.FC<CircularMetricGaugeProps> = ({
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
   metrics,
   apsDemandDL,
+  apsDemandIDL,
+  apsPlan,
   hrActualDL,
   selectedYear = 2026,
   selectedMonth = 9,
@@ -117,7 +121,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   const displayActual = hrActualDL !== undefined ? hrActualDL : Math.round(metrics.totalDL * 0.98);
 
   // Total Workforce: DL + IDL
-  const totalIDL = metrics?.totalIDL ?? 0;
+  const totalIDL = apsDemandIDL !== undefined ? apsDemandIDL : (metrics?.totalIDL ?? 0);
   const totalWorkforce = displayDemand + totalIDL;
 
   // HR Payroll Total Workforce & DL/IDL
@@ -221,6 +225,65 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       : 3;
 
     // 2. Scheduled Demand Daily Active Lines & Shifts (分子: 根據排程 Demand 每天有開的線數及班別)
+    if (apsPlan?.scheduleStats) {
+      const stats = apsPlan.scheduleStats;
+      const effSmtCapShifts = stats.smtIeCapacityShifts > 0 ? stats.smtIeCapacityShifts : smtCapacityShifts;
+      const effPcaCapShifts = stats.pcaIeCapacityShifts > 0 ? stats.pcaIeCapacityShifts : pcaCapacityShifts;
+      const effL6CapShifts = effSmtCapShifts + effPcaCapShifts;
+      const effCpuCapShifts = stats.cpuIeCapacityShifts > 0 ? stats.cpuIeCapacityShifts : cpuCapacityShifts;
+      const effRackCapShifts = stats.rackIeCapacityShifts > 0 ? stats.rackIeCapacityShifts : rackCapacityShifts;
+
+      const smtActiveShifts = Number(stats.smtAvgActiveLineShifts.toFixed(1));
+      const pcaActiveShifts = Number(stats.pcaAvgActiveLineShifts.toFixed(1));
+      const l6ActiveShifts = Number((stats.smtAvgActiveLineShifts + stats.pcaAvgActiveLineShifts).toFixed(1));
+      const cpuActiveShifts = Number(stats.cpuAvgActiveLineShifts.toFixed(1));
+      const rackActiveShifts = Number(stats.rackAvgActiveLineShifts.toFixed(1));
+
+      const smtActiveLines = apsPlan.lines.filter((l) => l.process === 'SMT' && l.dailyShifts > 0).length;
+      const pcaActiveLines = apsPlan.lines.filter((l) => l.process === 'PCA' && l.dailyShifts > 0).length;
+      const l6ActiveLines = smtActiveLines + pcaActiveLines;
+      const cpuActiveLines = apsPlan.lines.filter(
+        (l) => l.process === 'System Assembly' && !/rack|\br0?\d/i.test(l.lineName) && l.dailyShifts > 0
+      ).length;
+      const rackActiveLines = apsPlan.lines.filter(
+        (l) => l.process === 'System Assembly' && /rack|\br0?\d/i.test(l.lineName) && l.dailyShifts > 0
+      ).length;
+
+      const smtRate = effSmtCapShifts > 0 ? Math.round((stats.smtAvgActiveLineShifts / effSmtCapShifts) * 1000) / 10 : 0;
+      const pcaRate = effPcaCapShifts > 0 ? Math.round((stats.pcaAvgActiveLineShifts / effPcaCapShifts) * 1000) / 10 : 0;
+      const l6Rate = effL6CapShifts > 0 ? Math.round(((stats.smtAvgActiveLineShifts + stats.pcaAvgActiveLineShifts) / effL6CapShifts) * 1000) / 10 : 0;
+      const l10Rate = effCpuCapShifts > 0 ? Math.round((stats.cpuAvgActiveLineShifts / effCpuCapShifts) * 1000) / 10 : 0;
+      const l11Rate = effRackCapShifts > 0 ? Math.round((stats.rackAvgActiveLineShifts / effRackCapShifts) * 1000) / 10 : 0;
+
+      return {
+        smtCapacityLines,
+        smtCapacityShifts: effSmtCapShifts,
+        smtActiveLines,
+        smtActiveShifts,
+        smtRate,
+        pcaCapacityLines,
+        pcaCapacityShifts: effPcaCapShifts,
+        pcaActiveLines,
+        pcaActiveShifts,
+        pcaRate,
+        l6CapacityLines,
+        l6CapacityShifts: effL6CapShifts,
+        l6ActiveLines,
+        l6ActiveShifts,
+        l6Rate,
+        cpuCapacityLines,
+        cpuCapacityShifts: effCpuCapShifts,
+        cpuActiveLines,
+        cpuActiveShifts,
+        l10Rate,
+        rackCapacityLines,
+        rackCapacityShifts: effRackCapShifts,
+        rackActiveLines,
+        rackActiveShifts,
+        l11Rate,
+      };
+    }
+
     const smtMonthFactors: Record<number, number> = {
       1: 0.95, 2: 0.88, 3: 0.98, 4: 1.0, 5: 1.02, 6: 1.04, 7: 1.06, 8: 1.0, 9: 1.01, 10: 1.05, 11: 1.02, 12: 0.97
     };
@@ -292,7 +355,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       rackActiveShifts,
       l11Rate,
     };
-  }, [currentSite, selectedMonth]);
+  }, [currentSite, selectedMonth, apsPlan]);
 
   const {
     smtCapacityLines,
@@ -463,7 +526,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-['JetBrains_Mono'] text-xs font-bold text-[#ffb86b] uppercase tracking-wider block">
-                        Monthly APS Demand
+                        Monthly Demand Scheduling
                       </span>
                       <span className="inline-flex items-center justify-center px-2 py-0.5 h-5 rounded text-[10px] font-['JetBrains_Mono'] font-bold shrink-0 leading-none whitespace-nowrap bg-[#ffb86b]/15 text-[#ffb86b] border border-[#ffb86b]/30">
                         DL + IDL
@@ -489,13 +552,27 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <div className="flex flex-col justify-between gap-1.5 min-h-[38px]">
                 <div className="flex justify-between items-center text-xs font-['JetBrains_Mono'] h-[22px]">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[#ffb86b]">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[#ffb86b]"
+                      title={
+                        apsPlan
+                          ? `Online DL: ${apsPlan.totalOnlineDL} (SMT ${apsPlan.smtOnlineDL} + PCA ${apsPlan.pcaOnlineDL} + Assy ${apsPlan.assemblyOnlineDL}) + Offline DL (per-shift avg × floor shifts): ${apsPlan.totalOfflineDL} + Quality & Support DL: ${apsPlan.totalSupportDL}`
+                          : undefined
+                      }
+                    >
                       <span className="w-2 h-2 rounded-full bg-[#ffb86b]" />
                       DL: <strong className="font-bold text-white">{displayDemand.toLocaleString()}</strong> HC
                       <span className="text-[10px] text-[#ffb86b]/80">({dlPercent}%)</span>
                     </span>
                     <span className="text-white/20">•</span>
-                    <span className="inline-flex items-center gap-1.5 text-[#5de6ff]">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[#5de6ff]"
+                      title={
+                        apsPlan
+                          ? `Mfg IDL: ${apsPlan.mfgIDL} + Quality & Support IDL: ${apsPlan.supportIDL}`
+                          : undefined
+                      }
+                    >
                       <span className="w-2 h-2 rounded-full bg-[#5de6ff]" />
                       IDL: <strong className="font-bold text-white">{totalIDL.toLocaleString()}</strong> HC
                       <span className="text-[10px] text-[#5de6ff]/80">({idlPercent}%)</span>

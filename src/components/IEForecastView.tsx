@@ -205,6 +205,22 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
   const totalMfgDL = smtTotalDL + pcaTotalDL + assyTotalDL;
   const totalMfgIDL = (site.smtIdl || 0) + (site.pcaIdl || 0) + (site.assemblyIdl || 0);
 
+  // Manufacturing Offline DL & IDL Shift Coverage & Avg per Shift
+  const smtOfflineShift: ShiftNumber = typeof site.smtOfflineShift === 'number' ? site.smtOfflineShift : 2;
+  const smtIdlShift: ShiftNumber = typeof site.smtIdlShift === 'number' ? site.smtIdlShift : 2;
+  const pcaOfflineShift: ShiftNumber = typeof site.pcaOfflineShift === 'number' ? site.pcaOfflineShift : 2;
+  const pcaIdlShift: ShiftNumber = typeof site.pcaIdlShift === 'number' ? site.pcaIdlShift : 2;
+  const assyOfflineShift: ShiftNumber = typeof site.assemblyOfflineShift === 'number' ? site.assemblyOfflineShift : 2;
+  const assyIdlShift: ShiftNumber = typeof site.assemblyIdlShift === 'number' ? site.assemblyIdlShift : 2;
+
+  const formatAvgPerShift = (val: number) => (Number.isInteger(val) ? String(val) : val.toFixed(1));
+  const smtOfflineAvgPerShift = smtOfflineShift > 0 ? smtOfflineDL / smtOfflineShift : 0;
+  const smtIdlAvgPerShift = smtIdlShift > 0 ? (site.smtIdl || 0) / smtIdlShift : 0;
+  const pcaOfflineAvgPerShift = pcaOfflineShift > 0 ? pcaOfflineDL / pcaOfflineShift : 0;
+  const pcaIdlAvgPerShift = pcaIdlShift > 0 ? (site.pcaIdl || 0) / pcaIdlShift : 0;
+  const assyOfflineAvgPerShift = assyOfflineShift > 0 ? assyOfflineDL / assyOfflineShift : 0;
+  const assyIdlAvgPerShift = assyIdlShift > 0 ? (site.assemblyIdl || 0) / assyIdlShift : 0;
+
   // QC Subtotals
   const qcTotalDL = (site.qualityControl.items && site.qualityControl.items.length > 0)
     ? site.qualityControl.items.reduce((acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1), 0)
@@ -275,8 +291,16 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     onUpdateSite({ ...site, smtOfflineDL: val });
   };
 
+  const handleSmtOfflineShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, smtOfflineShift: shift });
+  };
+
   const handleSmtIdlChange = (val: number) => {
     onUpdateSite({ ...site, smtIdl: val });
+  };
+
+  const handleSmtIdlShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, smtIdlShift: shift });
   };
 
   const handleSmtCostCenterChange = (val: string[]) => {
@@ -310,8 +334,16 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     onUpdateSite({ ...site, pcaOfflineDL: val });
   };
 
+  const handlePcaOfflineShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, pcaOfflineShift: shift });
+  };
+
   const handlePcaIdlChange = (val: number) => {
     onUpdateSite({ ...site, pcaIdl: val });
+  };
+
+  const handlePcaIdlShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, pcaIdlShift: shift });
   };
 
   const handlePcaCostCenterChange = (val: string[]) => {
@@ -349,8 +381,16 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     onUpdateSite({ ...site, assemblyOfflineDL: val });
   };
 
+  const handleAssemblyOfflineShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, assemblyOfflineShift: shift });
+  };
+
   const handleAssemblyIdlChange = (val: number) => {
     onUpdateSite({ ...site, assemblyIdl: val });
+  };
+
+  const handleAssemblyIdlShiftChange = (shift: ShiftNumber) => {
+    onUpdateSite({ ...site, assemblyIdlShift: shift });
   };
 
   const handleAssemblyCostCenterChange = (val: string[]) => {
@@ -1181,7 +1221,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     )}
                   </div>
                   <span className="text-[11px] font-medium text-[#d7c3b2]/80 font-['JetBrains_Mono'] tracking-wide pl-8">
-                    Online: {smtOnlineDL} + Offline: {smtOfflineDL} = Total {smtTotalDL} DL
+                    Online: {smtOnlineDL} + Offline: {smtOfflineDL} ({smtOfflineShift}S • Avg {formatAvgPerShift(smtOfflineAvgPerShift)}/S) = Total {smtTotalDL} DL • IDL: {site.smtIdl ?? 0} ({smtIdlShift}S • Avg {formatAvgPerShift(smtIdlAvgPerShift)}/S)
                   </span>
                 </div>
 
@@ -1197,7 +1237,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     disabled={!hasEditPermission}
                   />
 
-                  {/* Parallel Offline DL */}
+                  {/* Parallel Offline DL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#ffb86b]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1212,14 +1252,33 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.smtOfflineDL ?? 0}
                       onChange={(e) => handleSmtOfflineChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#ffb86b]/40 focus:border-[#ffb86b]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
-                      title={hasEditPermission ? "SMT Department Independent Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
+                      title={hasEditPermission ? "SMT Total Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-smt-offline-shift"
+                      disabled={!hasEditPermission}
+                      value={smtOfflineShift}
+                      onChange={(e) => handleSmtOfflineShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "SMT Offline DL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
-                  {/* Parallel SMT IDL */}
+                  {/* Parallel SMT IDL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#5de6ff]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1234,11 +1293,30 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.smtIdl ?? 0}
                       onChange={(e) => handleSmtIdlChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#5de6ff]/40 focus:border-[#5de6ff]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
                       title={hasEditPermission ? "SMT Segment Indirect Labor" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-smt-idl-shift"
+                      disabled={!hasEditPermission}
+                      value={smtIdlShift}
+                      onChange={(e) => handleSmtIdlShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#5de6ff] focus:border-[#5de6ff]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "SMT IDL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
                   {/* Collapse / Expand toggle button for SMT */}
@@ -1446,7 +1524,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     )}
                   </div>
                   <span className="text-[11px] font-medium text-[#d7c3b2]/80 font-['JetBrains_Mono'] tracking-wide pl-8">
-                    Online: {pcaOnlineDL} + Offline: {pcaOfflineDL} = Total {pcaTotalDL} DL
+                    Online: {pcaOnlineDL} + Offline: {pcaOfflineDL} ({pcaOfflineShift}S • Avg {formatAvgPerShift(pcaOfflineAvgPerShift)}/S) = Total {pcaTotalDL} DL • IDL: {site.pcaIdl ?? 0} ({pcaIdlShift}S • Avg {formatAvgPerShift(pcaIdlAvgPerShift)}/S)
                   </span>
                 </div>
 
@@ -1462,7 +1540,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     disabled={!hasEditPermission}
                   />
 
-                  {/* Parallel Offline DL */}
+                  {/* Parallel Offline DL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#ffb86b]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1477,14 +1555,33 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.pcaOfflineDL ?? 0}
                       onChange={(e) => handlePcaOfflineChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#ffb86b]/40 focus:border-[#ffb86b]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
-                      title={hasEditPermission ? "PCA Department Independent Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
+                      title={hasEditPermission ? "PCA Total Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-pca-offline-shift"
+                      disabled={!hasEditPermission}
+                      value={pcaOfflineShift}
+                      onChange={(e) => handlePcaOfflineShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "PCA Offline DL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
-                  {/* Parallel PCA IDL */}
+                  {/* Parallel PCA IDL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#5de6ff]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1499,11 +1596,30 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.pcaIdl ?? 0}
                       onChange={(e) => handlePcaIdlChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#5de6ff]/40 focus:border-[#5de6ff]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
                       title={hasEditPermission ? "PCA Segment Indirect Labor" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-pca-idl-shift"
+                      disabled={!hasEditPermission}
+                      value={pcaIdlShift}
+                      onChange={(e) => handlePcaIdlShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#5de6ff] focus:border-[#5de6ff]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "PCA IDL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
                   {/* Collapse / Expand toggle button for PCA */}
@@ -1798,7 +1914,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     )}
                   </div>
                   <span className="text-[11px] font-medium text-[#d7c3b2]/80 font-['JetBrains_Mono'] tracking-wide pl-8">
-                    Online: {assyOnlineDL} DL (CPU: {cpuAssyOnlineDL} + Rack: {rackAssyOnlineDL}) + Offline: {assyOfflineDL} = Total {assyTotalDL} DL
+                    Online: {assyOnlineDL} DL (CPU: {cpuAssyOnlineDL} + Rack: {rackAssyOnlineDL}) + Offline: {assyOfflineDL} ({assyOfflineShift}S • Avg {formatAvgPerShift(assyOfflineAvgPerShift)}/S) = Total {assyTotalDL} DL • IDL: {site.assemblyIdl ?? 0} ({assyIdlShift}S • Avg {formatAvgPerShift(assyIdlAvgPerShift)}/S)
                   </span>
                 </div>
 
@@ -1814,7 +1930,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     disabled={!hasEditPermission}
                   />
 
-                  {/* Parallel Offline DL */}
+                  {/* Parallel Offline DL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#ffb86b]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1829,14 +1945,33 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.assemblyOfflineDL ?? 0}
                       onChange={(e) => handleAssemblyOfflineChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#ffb86b] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#ffb86b]/40 focus:border-[#ffb86b]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
-                      title={hasEditPermission ? "System Assembly Independent Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
+                      title={hasEditPermission ? "System Assembly Total Offline DL pool" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-assembly-offline-shift"
+                      disabled={!hasEditPermission}
+                      value={assyOfflineShift}
+                      onChange={(e) => handleAssemblyOfflineShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "System Assembly Offline DL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
-                  {/* Parallel ASSY IDL */}
+                  {/* Parallel ASSY IDL with Shift */}
                   <div className={`flex items-center h-[34px] box-border gap-1.5 bg-[#131316] px-2.5 rounded-md border transition-colors shrink-0 ${
                     hasEditPermission ? 'border-[#524437]/40 hover:border-[#5de6ff]/60' : 'border-[#524437]/20 opacity-70'
                   }`}>
@@ -1851,11 +1986,30 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       disabled={!hasEditPermission}
                       value={site.assemblyIdl ?? 0}
                       onChange={(e) => handleAssemblyIdlChange(Math.max(0, Number(e.target.value)))}
-                      className={`w-14 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                      className={`w-12 h-6 px-1.5 rounded text-center text-xs font-bold text-[#5de6ff] font-['JetBrains_Mono'] focus:outline-none leading-none ${
                         hasEditPermission ? 'bg-[#201f23] border border-[#5de6ff]/40 focus:border-[#5de6ff]' : 'bg-[#17171a] border border-[#524437]/30 cursor-not-allowed opacity-75'
                       }`}
                       title={hasEditPermission ? "Assembly Segment Indirect Labor" : `Read-Only: Requires ${site.code} IE permission`}
                     />
+                    <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/50">÷</span>
+                    <select
+                      id="select-assembly-idl-shift"
+                      disabled={!hasEditPermission}
+                      value={assyIdlShift}
+                      onChange={(e) => handleAssemblyIdlShiftChange(Number(e.target.value) as ShiftNumber)}
+                      className={`h-6 px-1.5 rounded text-[11px] font-bold font-['JetBrains_Mono'] focus:outline-none leading-none ${
+                        hasEditPermission
+                          ? 'bg-[#201f23] border border-[#524437] text-[#5de6ff] focus:border-[#5de6ff]'
+                          : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                      }`}
+                      title={hasEditPermission ? "System Assembly IDL shift coverage" : `Read-Only: Requires ${site.code} IE permission`}
+                    >
+                      <option value={0}>0S</option>
+                      <option value={1}>1S</option>
+                      <option value={2}>2S</option>
+                      <option value={3}>3S</option>
+                      <option value={4}>4S</option>
+                    </select>
                   </div>
 
                   {/* Collapse / Expand toggle button for System Assembly */}
