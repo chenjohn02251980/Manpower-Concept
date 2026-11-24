@@ -387,7 +387,7 @@ export function generateCostCenterPayrollData(
 
   // Quality Control
   const qcCC = parseCostCenters(site.qualityControl?.oqcCostCenter);
-  const qcApsDL = site.qualityControl?.oqcStandardDL || 0;
+  const qcApsDL = (site.qualityControl?.pqcDL || 0) + (site.qualityControl?.oqcStandardDL || 0);
   const rawQcMonthEndDL = qcApsDL;
 
   // Trouble Shooting

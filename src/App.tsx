@@ -156,21 +156,45 @@ export default function App() {
               pqcIDL:
                 site.qualityControl?.pqcIDL ??
                 ((site.qualityControl?.pqcDayShift || 0) + (site.qualityControl?.pqcNightShift || 0)),
+              items: site.qualityControl?.items
+                ? site.qualityControl.items.map((it: any) => ({
+                    ...it,
+                    shift: typeof it.shift === 'number' ? it.shift : 1,
+                  }))
+                : undefined,
             },
             troubleShooting: {
               ...initSite.troubleShooting,
               ...(site.troubleShooting || {}),
               costCenter: site.troubleShooting?.costCenter ?? initSite.troubleShooting?.costCenter,
+              items: site.troubleShooting?.items
+                ? site.troubleShooting.items.map((it: any) => ({
+                    ...it,
+                    shift: typeof it.shift === 'number' ? it.shift : 1,
+                  }))
+                : undefined,
             },
             warehouse: {
               ...initSite.warehouse,
               ...(site.warehouse || {}),
               costCenter: site.warehouse?.costCenter ?? initSite.warehouse?.costCenter,
+              items: site.warehouse?.items
+                ? site.warehouse.items.map((it: any) => ({
+                    ...it,
+                    shift: typeof it.shift === 'number' ? it.shift : 1,
+                  }))
+                : undefined,
             },
             otherSupport: {
               ...initSite.otherSupport,
               ...(site.otherSupport || {}),
               costCenter: site.otherSupport?.costCenter ?? initSite.otherSupport?.costCenter,
+              items: site.otherSupport?.items
+                ? site.otherSupport.items.map((it: any) => ({
+                    ...it,
+                    shift: typeof it.shift === 'number' ? it.shift : 1,
+                  }))
+                : undefined,
             },
           };
         }

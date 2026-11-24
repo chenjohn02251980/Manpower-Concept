@@ -207,7 +207,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
 
   // QC Subtotals
   const qcTotalDL = (site.qualityControl.items && site.qualityControl.items.length > 0)
-    ? site.qualityControl.items.reduce((acc, it) => acc + (Number(it.dl) || 0), 0)
+    ? site.qualityControl.items.reduce((acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1), 0)
     : (site.qualityControl.pqcDL || 0) + (site.qualityControl.oqcStandardDL || site.qualityControl.oqcDL || 0);
   const qcTotalIDL = (site.qualityControl.items && site.qualityControl.items.length > 0)
     ? site.qualityControl.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
@@ -217,12 +217,24 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       (site.qualityControl.oqcIndirectIDL || site.qualityControl.oqcIDL || 0);
 
   // Support Subtotals
-  const tsTotalDL = site.troubleShooting.dlEntry || 0;
-  const tsTotalIDL = site.troubleShooting.idlEntry || 0;
-  const whTotalDL = site.warehouse.logisticsDL || 0;
-  const whTotalIDL = site.warehouse.adminIDL || 0;
-  const otherTotalDL = site.otherSupport.dl ?? 0;
-  const otherTotalIDL = site.otherSupport.generalIDL || 0;
+  const tsTotalDL = (site.troubleShooting.items && site.troubleShooting.items.length > 0)
+    ? site.troubleShooting.items.reduce((acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1), 0)
+    : (site.troubleShooting.dlEntry || 0);
+  const tsTotalIDL = (site.troubleShooting.items && site.troubleShooting.items.length > 0)
+    ? site.troubleShooting.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (site.troubleShooting.idlEntry || 0);
+  const whTotalDL = (site.warehouse.items && site.warehouse.items.length > 0)
+    ? site.warehouse.items.reduce((acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1), 0)
+    : (site.warehouse.logisticsDL || 0);
+  const whTotalIDL = (site.warehouse.items && site.warehouse.items.length > 0)
+    ? site.warehouse.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (site.warehouse.adminIDL || 0);
+  const otherTotalDL = (site.otherSupport.items && site.otherSupport.items.length > 0)
+    ? site.otherSupport.items.reduce((acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1), 0)
+    : (site.otherSupport.dl ?? 0);
+  const otherTotalIDL = (site.otherSupport.items && site.otherSupport.items.length > 0)
+    ? site.otherSupport.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (site.otherSupport.generalIDL || 0);
 
   // Full Plant Grand Totals
   const plantGrandTotalDL = totalMfgDL + qcTotalDL + tsTotalDL + whTotalDL + otherTotalDL;
@@ -427,24 +439,28 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       {
         id: 'qc-item-1',
         name: 'PQC / SQC Process Audit (製程品質檢驗)',
+        shift: 1,
         dl: pqcDL,
         idl: pqcIDL,
       },
       {
         id: 'qc-item-2',
         name: 'OQC Outgoing Inspection (出貨檢驗/抽檢)',
+        shift: 1,
         dl: oqcDL,
         idl: oqcIDL,
       },
       {
         id: 'qc-item-3',
         name: 'IQC Incoming Inspection (進料檢驗/原物料品管)',
+        shift: 1,
         dl: 0,
         idl: 0,
       },
       {
         id: 'qc-item-4',
         name: 'Reliability & ORT Lab (信賴性與可靠度實驗室)',
+        shift: 1,
         dl: 0,
         idl: 0,
       },
@@ -464,26 +480,30 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     ? site.qualityControl.items
     : defaultQcItems;
 
+  const getItemEffectiveDL = (item: { dl?: number; shift?: ShiftNumber }) =>
+    (Number(item.dl) || 0) * (typeof item.shift === 'number' ? item.shift : 1);
+
   const handleAddQcItem = () => {
     setQcOpen(true);
     const currentItems = qcItems;
     const newItem: QualityControlItem = {
       id: `qc-${Date.now()}`,
       name: `QC Station ${currentItems.length + 1}`,
+      shift: 2,
       dl: 4,
       idl: 1,
     };
     const updated = [...currentItems, newItem];
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
       qualityControl: {
         ...site.qualityControl,
         items: updated,
-        pqcDL: updated[0] ? Number(updated[0].dl) || 0 : 0,
+        pqcDL: updated[0] ? getItemEffectiveDL(updated[0]) : 0,
         pqcIDL: updated[0] ? Number(updated[0].idl) || 0 : 0,
-        oqcStandardDL: updated.slice(1).reduce((s, it) => s + (Number(it.dl) || 0), 0),
+        oqcStandardDL: updated.slice(1).reduce((s, it) => s + getItemEffectiveDL(it), 0),
         oqcIndirectIDL: updated.slice(1).reduce((s, it) => s + (Number(it.idl) || 0), 0),
         oqcDL: newTotalDL,
         oqcIDL: newTotalIDL,
@@ -497,21 +517,26 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       if (item.id === id) {
         return {
           ...item,
-          [field]: field === 'name' ? value : Math.max(0, Number(value) || 0),
+          [field]:
+            field === 'name'
+              ? value
+              : field === 'shift'
+              ? (Number(value) as ShiftNumber)
+              : Math.max(0, Number(value) || 0),
         };
       }
       return item;
     });
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
       qualityControl: {
         ...site.qualityControl,
         items: updated,
-        pqcDL: updated[0] ? Number(updated[0].dl) || 0 : 0,
+        pqcDL: updated[0] ? getItemEffectiveDL(updated[0]) : 0,
         pqcIDL: updated[0] ? Number(updated[0].idl) || 0 : 0,
-        oqcStandardDL: updated.slice(1).reduce((s, it) => s + (Number(it.dl) || 0), 0),
+        oqcStandardDL: updated.slice(1).reduce((s, it) => s + getItemEffectiveDL(it), 0),
         oqcIndirectIDL: updated.slice(1).reduce((s, it) => s + (Number(it.idl) || 0), 0),
         oqcDL: newTotalDL,
         oqcIDL: newTotalIDL,
@@ -522,16 +547,16 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
   const handleDeleteQcItem = (id: string) => {
     const currentItems = qcItems;
     const updated = currentItems.filter((item) => item.id !== id);
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
       qualityControl: {
         ...site.qualityControl,
         items: updated,
-        pqcDL: updated[0] ? Number(updated[0].dl) || 0 : 0,
+        pqcDL: updated[0] ? getItemEffectiveDL(updated[0]) : 0,
         pqcIDL: updated[0] ? Number(updated[0].idl) || 0 : 0,
-        oqcStandardDL: updated.slice(1).reduce((s, it) => s + (Number(it.dl) || 0), 0),
+        oqcStandardDL: updated.slice(1).reduce((s, it) => s + getItemEffectiveDL(it), 0),
         oqcIndirectIDL: updated.slice(1).reduce((s, it) => s + (Number(it.idl) || 0), 0),
         oqcDL: newTotalDL,
         oqcIDL: newTotalIDL,
@@ -544,12 +569,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     {
       id: 'wh-item-1',
       name: 'Material Logistics (收發料/倉管)',
+      shift: 1,
       dl: site.warehouse.logisticsDL || 0,
       idl: 0,
     },
     {
       id: 'wh-item-2',
       name: 'Inventory Control (物控/帳務)',
+      shift: 1,
       dl: 0,
       idl: site.warehouse.adminIDL || 0,
     },
@@ -565,11 +592,12 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     const newItem: WarehouseItem = {
       id: `wh-${Date.now()}`,
       name: `Warehouse Function ${currentItems.length + 1}`,
+      shift: 2,
       dl: 4,
       idl: 1,
     };
     const updated = [...currentItems, newItem];
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -588,12 +616,17 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       if (item.id === id) {
         return {
           ...item,
-          [field]: field === 'name' ? value : Math.max(0, Number(value) || 0),
+          [field]:
+            field === 'name'
+              ? value
+              : field === 'shift'
+              ? (Number(value) as ShiftNumber)
+              : Math.max(0, Number(value) || 0),
         };
       }
       return item;
     });
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -609,7 +642,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
   const handleDeleteWarehouseItem = (id: string) => {
     const currentItems = warehouseItems;
     const updated = currentItems.filter((item) => item.id !== id);
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -627,12 +660,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     {
       id: 'ts-item-1',
       name: 'Debug & Failure Analysis (Debug/FA)',
+      shift: 1,
       dl: site.troubleShooting.dlEntry || 0,
       idl: 0,
     },
     {
       id: 'ts-item-2',
       name: 'BGA & Board Repair Cell (維修站/RMA)',
+      shift: 1,
       dl: 0,
       idl: site.troubleShooting.idlEntry || 0,
     },
@@ -648,11 +683,12 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     const newItem: TroubleshootingItem = {
       id: `ts-${Date.now()}`,
       name: `Trouble Shooting Station ${currentItems.length + 1}`,
+      shift: 2,
       dl: 4,
       idl: 1,
     };
     const updated = [...currentItems, newItem];
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -671,12 +707,17 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       if (item.id === id) {
         return {
           ...item,
-          [field]: field === 'name' ? value : Math.max(0, Number(value) || 0),
+          [field]:
+            field === 'name'
+              ? value
+              : field === 'shift'
+              ? (Number(value) as ShiftNumber)
+              : Math.max(0, Number(value) || 0),
         };
       }
       return item;
     });
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -692,7 +733,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
   const handleDeleteTroubleshootingItem = (id: string) => {
     const currentItems = troubleshootingItems;
     const updated = currentItems.filter((item) => item.id !== id);
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -710,12 +751,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     {
       id: 'oth-item-1',
       name: 'Plant Facility & Cleanroom Ops (廠務設施)',
+      shift: 1,
       dl: site.otherSupport.dl ?? 0,
       idl: 0,
     },
     {
       id: 'oth-item-2',
       name: 'General Administration & Affairs (總務與廠區行政)',
+      shift: 1,
       dl: 0,
       idl: site.otherSupport.generalIDL || 0,
     },
@@ -731,11 +774,12 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
     const newItem: OtherSupportItem = {
       id: `oth-${Date.now()}`,
       name: `Other Support Function ${currentItems.length + 1}`,
+      shift: 2,
       dl: 2,
       idl: 2,
     };
     const updated = [...currentItems, newItem];
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -754,12 +798,17 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
       if (item.id === id) {
         return {
           ...item,
-          [field]: field === 'name' ? value : Math.max(0, Number(value) || 0),
+          [field]:
+            field === 'name'
+              ? value
+              : field === 'shift'
+              ? (Number(value) as ShiftNumber)
+              : Math.max(0, Number(value) || 0),
         };
       }
       return item;
     });
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -775,7 +824,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
   const handleDeleteOtherSupportItem = (id: string) => {
     const currentItems = otherSupportItems;
     const updated = currentItems.filter((item) => item.id !== id);
-    const newTotalDL = updated.reduce((sum, item) => sum + (Number(item.dl) || 0), 0);
+    const newTotalDL = updated.reduce((sum, item) => sum + getItemEffectiveDL(item), 0);
     const newTotalIDL = updated.reduce((sum, item) => sum + (Number(item.idl) || 0), 0);
     onUpdateSite({
       ...site,
@@ -2446,30 +2495,38 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                     <thead className="bg-[#201f23] text-[#d7c3b2]/90 font-['JetBrains_Mono'] uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="p-3 border-b border-[#524437]/40">QUALITY CONTROL STATION / FUNCTION NAME</th>
-                        <th className="p-3 border-b border-[#524437]/40 text-right w-44">
-                          DIRECT LABOR (DL)
+                        <th className="p-3 border-b border-[#524437]/40 text-center w-36">
+                          SHIFTS
                         </th>
-                        <th className="p-3 border-b border-[#524437]/40 text-right w-44 text-[#5de6ff]">
+                        <th className="p-3 border-b border-[#524437]/40 text-right w-40">
+                          STD DL / SHIFT
+                        </th>
+                        <th className="p-3 border-b border-[#524437]/40 text-right w-32 text-[#ffb86b]">
+                          TOTAL DL
+                        </th>
+                        <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#5de6ff]">
                           INDIRECT LABOR (IDL)
                         </th>
-                        <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#4edea3]">
+                        <th className="p-3 border-b border-[#524437]/40 text-right w-36 text-[#4edea3]">
                           TOTAL (DL+IDL)
                         </th>
-                        <th className="p-3 border-b border-[#524437]/40 text-center w-20">ACTION</th>
+                        <th className="p-3 border-b border-[#524437]/40 text-center w-16">ACTION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#524437]/30 font-['JetBrains_Mono']">
                       {qcItems.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-6 text-center text-[#d7c3b2]/50 italic">
+                          <td colSpan={7} className="p-6 text-center text-[#d7c3b2]/50 italic">
                             No quality control stations configured. Click "ADD QC STATION" to add a new function.
                           </td>
                         </tr>
                       ) : (
                         qcItems.map((item, idx) => {
+                          const shiftCount = typeof item.shift === 'number' ? item.shift : 1;
                           const rowDL = Number(item.dl) || 0;
+                          const rowTotalDL = rowDL * shiftCount;
                           const rowIDL = Number(item.idl) || 0;
-                          const rowTotal = rowDL + rowIDL;
+                          const rowTotal = rowTotalDL + rowIDL;
 
                           return (
                             <tr
@@ -2489,6 +2546,27 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                   title={hasEditPermission ? "Station Name" : `Read-Only: Requires ${site.code} IE permission`}
                                 />
                               </td>
+                              <td className="p-2.5 text-center">
+                                <select
+                                  disabled={!hasEditPermission}
+                                  value={shiftCount}
+                                  onChange={(e) =>
+                                    handleUpdateQcItem(item.id, 'shift', Number(e.target.value) as ShiftNumber)
+                                  }
+                                  className={`px-3 py-1.5 rounded text-xs font-bold font-['JetBrains_Mono'] focus:outline-none text-center ${
+                                    hasEditPermission
+                                      ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                                      : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                                  }`}
+                                  title={hasEditPermission ? "Select shifts" : `Read-Only: Only ${site.code} IE can change shifts`}
+                                >
+                                  <option value={0}>0 Shifts (Offline)</option>
+                                  <option value={1}>1 Shift</option>
+                                  <option value={2}>2 Shifts</option>
+                                  <option value={3}>3 Shifts</option>
+                                  <option value={4}>4 Shifts</option>
+                                </select>
+                              </td>
                               <td className="p-2.5 text-right">
                                 <input
                                   type="number"
@@ -2496,11 +2574,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                   disabled={!hasEditPermission}
                                   value={item.dl}
                                   onChange={(e) => handleUpdateQcItem(item.id, 'dl', e.target.value)}
-                                  className={`data-table-input font-bold text-[#ffb86b] w-28 text-right font-['JetBrains_Mono'] ${
-                                    hasEditPermission ? 'focus:border-[#ffb86b]' : 'cursor-not-allowed opacity-80'
+                                  className={`data-table-input font-bold text-[#e5e1e6] w-24 text-right font-['JetBrains_Mono'] ${
+                                    hasEditPermission ? 'focus:border-[#ffb86b]' : 'text-[#d7c3b2]/60 cursor-not-allowed opacity-80'
                                   }`}
-                                  title={hasEditPermission ? "Direct Labor (DL)" : `Read-Only: Requires ${site.code} IE permission`}
+                                  title={hasEditPermission ? "Standard DL per Shift" : `Read-Only: Requires ${site.code} IE permission`}
                                 />
+                              </td>
+                              <td className="p-2.5 text-right font-['JetBrains_Mono'] font-bold text-[#ffb86b] text-sm">
+                                {rowTotalDL} DL
                               </td>
                               <td className="p-2.5 text-right">
                                 <input
@@ -2509,14 +2590,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                   disabled={!hasEditPermission}
                                   value={item.idl}
                                   onChange={(e) => handleUpdateQcItem(item.id, 'idl', e.target.value)}
-                                  className={`data-table-input font-bold text-[#5de6ff] w-28 text-right font-['JetBrains_Mono'] ${
+                                  className={`data-table-input font-bold text-[#5de6ff] w-24 text-right font-['JetBrains_Mono'] ${
                                     hasEditPermission ? 'focus:border-[#5de6ff]' : 'cursor-not-allowed opacity-80'
                                   }`}
                                   title={hasEditPermission ? "Indirect Labor (IDL)" : `Read-Only: Requires ${site.code} IE permission`}
                                 />
                               </td>
                               <td className="p-2.5 text-right font-bold text-[#4edea3] text-sm">
-                                {rowTotal}
+                                {rowTotal} <span className="text-xs text-[#d7c3b2]/60 font-normal">HC</span>
                               </td>
                               <td className="p-2.5 text-center">
                                 <button
@@ -2543,6 +2624,12 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                           <td className="p-3 text-[#d7c3b2]/80">
                             Quality Control Subtotal ({qcItems.length} Stations):
                           </td>
+                          <td className="p-3 text-center text-[#d7c3b2]/60 text-[11px]">
+                            {qcItems.filter((it) => (typeof it.shift === 'number' ? it.shift : 1) > 0).length} Active
+                          </td>
+                          <td className="p-3 text-right text-[#d7c3b2]/70">
+                            {qcItems.reduce((s, it) => s + (Number(it.dl) || 0), 0)} / shift
+                          </td>
                           <td className="p-3 text-right text-[#ffb86b] font-bold text-sm">
                             {qcTotalDL} DL
                           </td>
@@ -2550,7 +2637,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                             {qcTotalIDL} IDL
                           </td>
                           <td className="p-3 text-right text-[#4edea3] font-bold text-sm">
-                            {qcTotalDL + qcTotalIDL}
+                            {qcTotalDL + qcTotalIDL} HC
                           </td>
                           <td></td>
                         </tr>
@@ -2698,30 +2785,38 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                           <thead className="bg-[#201f23] text-[#d7c3b2]/90 font-['JetBrains_Mono'] uppercase tracking-wider text-[11px]">
                             <tr>
                               <th className="p-3 border-b border-[#524437]/40">TROUBLE SHOOTING FUNCTION / STATION NAME</th>
-                              <th className="p-3 border-b border-[#524437]/40 text-right w-44">
-                                DIRECT LABOR (DL)
+                              <th className="p-3 border-b border-[#524437]/40 text-center w-36">
+                                SHIFTS
                               </th>
-                              <th className="p-3 border-b border-[#524437]/40 text-right w-44 text-[#5de6ff]">
+                              <th className="p-3 border-b border-[#524437]/40 text-right w-40">
+                                STD DL / SHIFT
+                              </th>
+                              <th className="p-3 border-b border-[#524437]/40 text-right w-32 text-[#ffb86b]">
+                                TOTAL DL
+                              </th>
+                              <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#5de6ff]">
                                 INDIRECT LABOR (IDL)
                               </th>
-                              <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#4edea3]">
+                              <th className="p-3 border-b border-[#524437]/40 text-right w-36 text-[#4edea3]">
                                 TOTAL (DL+IDL)
                               </th>
-                              <th className="p-3 border-b border-[#524437]/40 text-center w-20">ACTION</th>
+                              <th className="p-3 border-b border-[#524437]/40 text-center w-16">ACTION</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#524437]/30 font-['JetBrains_Mono']">
                             {troubleshootingItems.length === 0 ? (
                               <tr>
-                                <td colSpan={5} className="p-6 text-center text-[#d7c3b2]/50 italic">
+                                <td colSpan={7} className="p-6 text-center text-[#d7c3b2]/50 italic">
                                   No trouble shooting stations configured. Click "ADD TROUBLE SHOOTING ITEM" to add a new function.
                                 </td>
                               </tr>
                             ) : (
                               troubleshootingItems.map((item, idx) => {
+                                const shiftCount = typeof item.shift === 'number' ? item.shift : 1;
                                 const rowDL = Number(item.dl) || 0;
+                                const rowTotalDL = rowDL * shiftCount;
                                 const rowIDL = Number(item.idl) || 0;
-                                const rowTotal = rowDL + rowIDL;
+                                const rowTotal = rowTotalDL + rowIDL;
 
                                 return (
                                   <tr
@@ -2740,6 +2835,27 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                         }`}
                                       />
                                     </td>
+                                    <td className="p-2.5 text-center">
+                                      <select
+                                        disabled={!hasEditPermission}
+                                        value={shiftCount}
+                                        onChange={(e) =>
+                                          handleUpdateTroubleshootingItem(item.id, 'shift', Number(e.target.value) as ShiftNumber)
+                                        }
+                                        className={`px-3 py-1.5 rounded text-xs font-bold font-['JetBrains_Mono'] focus:outline-none text-center ${
+                                          hasEditPermission
+                                            ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                                            : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                                        }`}
+                                        title={hasEditPermission ? "Select shifts" : `Read-Only: Only ${site.code} IE can change shifts`}
+                                      >
+                                        <option value={0}>0 Shifts (Offline)</option>
+                                        <option value={1}>1 Shift</option>
+                                        <option value={2}>2 Shifts</option>
+                                        <option value={3}>3 Shifts</option>
+                                        <option value={4}>4 Shifts</option>
+                                      </select>
+                                    </td>
                                     <td className="p-2.5 text-right">
                                       <div className="flex items-center justify-end gap-1.5">
                                         <input
@@ -2748,12 +2864,15 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                           disabled={!hasEditPermission}
                                           value={item.dl}
                                           onChange={(e) => handleUpdateTroubleshootingItem(item.id, 'dl', e.target.value)}
-                                          className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-28 ${
+                                          className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-24 ${
                                             hasEditPermission ? 'text-[#e5e1e6] focus:border-[#ffb86b]' : 'text-[#d7c3b2]/60 cursor-not-allowed opacity-80'
                                           }`}
                                         />
                                         <span className="text-[11px] text-[#d7c3b2]/60">DL</span>
                                       </div>
+                                    </td>
+                                    <td className="p-2.5 text-right font-['JetBrains_Mono'] font-bold text-[#ffb86b] text-sm">
+                                      {rowTotalDL} DL
                                     </td>
                                     <td className="p-2.5 text-right">
                                       <div className="flex items-center justify-end gap-1.5">
@@ -2763,7 +2882,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                           disabled={!hasEditPermission}
                                           value={item.idl}
                                           onChange={(e) => handleUpdateTroubleshootingItem(item.id, 'idl', e.target.value)}
-                                          className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-28 ${
+                                          className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-24 ${
                                             hasEditPermission ? 'focus:border-[#5de6ff]' : 'cursor-not-allowed opacity-80'
                                           }`}
                                         />
@@ -2805,8 +2924,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                 <span className="material-symbols-outlined text-sm">summarize</span>
                                 <span>Trouble Shooting Total Standard Manpower:</span>
                               </td>
-                              <td className="p-3 text-right text-[#e5e1e6]">
-                                {tsTotalDL} <span className="text-[10px] text-[#d7c3b2]/60 font-normal">DL</span>
+                              <td className="p-3 text-center text-[#d7c3b2]/60 text-[11px]">
+                                {troubleshootingItems.filter((it) => (typeof it.shift === 'number' ? it.shift : 1) > 0).length} Active
+                              </td>
+                              <td className="p-3 text-right text-[#d7c3b2]/70">
+                                {troubleshootingItems.reduce((s, it) => s + (Number(it.dl) || 0), 0)} <span className="text-[10px] font-normal">/ shift</span>
+                              </td>
+                              <td className="p-3 text-right text-[#ffb86b] font-bold">
+                                {tsTotalDL} <span className="text-[10px] font-normal">DL</span>
                               </td>
                               <td className="p-3 text-right text-[#5de6ff]">
                                 {tsTotalIDL} <span className="text-[10px] text-[#5de6ff]/70 font-normal">IDL</span>
@@ -2919,30 +3044,38 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                 <thead className="bg-[#201f23] text-[#d7c3b2]/90 font-['JetBrains_Mono'] uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="p-3 border-b border-[#524437]/40">WAREHOUSE FUNCTION / LINE NAME</th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-44">
-                      DIRECT LABOR (DL)
+                    <th className="p-3 border-b border-[#524437]/40 text-center w-36">
+                      SHIFTS
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-44 text-[#5de6ff]">
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-40">
+                      STD DL / SHIFT
+                    </th>
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-32 text-[#ffb86b]">
+                      TOTAL DL
+                    </th>
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#5de6ff]">
                       INDIRECT LABOR (IDL)
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#4edea3]">
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-36 text-[#4edea3]">
                       TOTAL (DL+IDL)
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-center w-20">ACTION</th>
+                    <th className="p-3 border-b border-[#524437]/40 text-center w-16">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#524437]/30 font-['JetBrains_Mono']">
                   {warehouseItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-6 text-center text-[#d7c3b2]/50 italic">
+                      <td colSpan={7} className="p-6 text-center text-[#d7c3b2]/50 italic">
                         No warehouse functions configured. Click "ADD WAREHOUSE ITEM" to add a new function.
                       </td>
                     </tr>
                   ) : (
                     warehouseItems.map((item, idx) => {
+                      const shiftCount = typeof item.shift === 'number' ? item.shift : 1;
                       const rowDL = Number(item.dl) || 0;
+                      const rowTotalDL = rowDL * shiftCount;
                       const rowIDL = Number(item.idl) || 0;
-                      const rowTotal = rowDL + rowIDL;
+                      const rowTotal = rowTotalDL + rowIDL;
 
                       return (
                         <tr
@@ -2961,6 +3094,27 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                               }`}
                             />
                           </td>
+                          <td className="p-2.5 text-center">
+                            <select
+                              disabled={!hasEditPermission}
+                              value={shiftCount}
+                              onChange={(e) =>
+                                handleUpdateWarehouseItem(item.id, 'shift', Number(e.target.value) as ShiftNumber)
+                              }
+                              className={`px-3 py-1.5 rounded text-xs font-bold font-['JetBrains_Mono'] focus:outline-none text-center ${
+                                hasEditPermission
+                                  ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                                  : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                              }`}
+                              title={hasEditPermission ? "Select shifts" : `Read-Only: Only ${site.code} IE can change shifts`}
+                            >
+                              <option value={0}>0 Shifts (Offline)</option>
+                              <option value={1}>1 Shift</option>
+                              <option value={2}>2 Shifts</option>
+                              <option value={3}>3 Shifts</option>
+                              <option value={4}>4 Shifts</option>
+                            </select>
+                          </td>
                           <td className="p-2.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <input
@@ -2969,12 +3123,15 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                 disabled={!hasEditPermission}
                                 value={item.dl}
                                 onChange={(e) => handleUpdateWarehouseItem(item.id, 'dl', e.target.value)}
-                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-28 ${
+                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-24 ${
                                   hasEditPermission ? 'text-[#e5e1e6] focus:border-[#ffb86b]' : 'text-[#d7c3b2]/60 cursor-not-allowed opacity-80'
                                 }`}
                               />
                               <span className="text-[11px] text-[#d7c3b2]/60">DL</span>
                             </div>
+                          </td>
+                          <td className="p-2.5 text-right font-['JetBrains_Mono'] font-bold text-[#ffb86b] text-sm">
+                            {rowTotalDL} DL
                           </td>
                           <td className="p-2.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
@@ -2984,7 +3141,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                 disabled={!hasEditPermission}
                                 value={item.idl}
                                 onChange={(e) => handleUpdateWarehouseItem(item.id, 'idl', e.target.value)}
-                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-28 ${
+                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-24 ${
                                   hasEditPermission ? 'focus:border-[#5de6ff]' : 'cursor-not-allowed opacity-80'
                                 }`}
                               />
@@ -3026,8 +3183,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       <span className="material-symbols-outlined text-sm">summarize</span>
                       <span>Warehouse Total Standard Manpower:</span>
                     </td>
-                    <td className="p-3 text-right text-[#e5e1e6]">
-                      {whTotalDL} <span className="text-[10px] text-[#d7c3b2]/60 font-normal">DL</span>
+                    <td className="p-3 text-center text-[#d7c3b2]/60 text-[11px]">
+                      {warehouseItems.filter((it) => (typeof it.shift === 'number' ? it.shift : 1) > 0).length} Active
+                    </td>
+                    <td className="p-3 text-right text-[#d7c3b2]/70">
+                      {warehouseItems.reduce((s, it) => s + (Number(it.dl) || 0), 0)} <span className="text-[10px] font-normal">/ shift</span>
+                    </td>
+                    <td className="p-3 text-right text-[#ffb86b] font-bold">
+                      {whTotalDL} <span className="text-[10px] font-normal">DL</span>
                     </td>
                     <td className="p-3 text-right text-[#5de6ff]">
                       {whTotalIDL} <span className="text-[10px] text-[#5de6ff]/70 font-normal">IDL</span>
@@ -3140,30 +3303,38 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                 <thead className="bg-[#201f23] text-[#d7c3b2]/90 font-['JetBrains_Mono'] uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="p-3 border-b border-[#524437]/40">OTHER SUPPORT FUNCTION / TEAM NAME</th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-44">
-                      DIRECT LABOR (DL)
+                    <th className="p-3 border-b border-[#524437]/40 text-center w-36">
+                      SHIFTS
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-44 text-[#5de6ff]">
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-40">
+                      STD DL / SHIFT
+                    </th>
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-32 text-[#ffb86b]">
+                      TOTAL DL
+                    </th>
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#5de6ff]">
                       INDIRECT LABOR (IDL)
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-right w-40 text-[#4edea3]">
+                    <th className="p-3 border-b border-[#524437]/40 text-right w-36 text-[#4edea3]">
                       TOTAL (DL+IDL)
                     </th>
-                    <th className="p-3 border-b border-[#524437]/40 text-center w-20">ACTION</th>
+                    <th className="p-3 border-b border-[#524437]/40 text-center w-16">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#524437]/30 font-['JetBrains_Mono']">
                   {otherSupportItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-6 text-center text-[#d7c3b2]/50 italic">
+                      <td colSpan={7} className="p-6 text-center text-[#d7c3b2]/50 italic">
                         No other support teams configured. Click "ADD OTHER SUPPORT ITEM" to add a new function.
                       </td>
                     </tr>
                   ) : (
                     otherSupportItems.map((item, idx) => {
+                      const shiftCount = typeof item.shift === 'number' ? item.shift : 1;
                       const rowDL = Number(item.dl) || 0;
+                      const rowTotalDL = rowDL * shiftCount;
                       const rowIDL = Number(item.idl) || 0;
-                      const rowTotal = rowDL + rowIDL;
+                      const rowTotal = rowTotalDL + rowIDL;
 
                       return (
                         <tr
@@ -3182,6 +3353,27 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                               }`}
                             />
                           </td>
+                          <td className="p-2.5 text-center">
+                            <select
+                              disabled={!hasEditPermission}
+                              value={shiftCount}
+                              onChange={(e) =>
+                                handleUpdateOtherSupportItem(item.id, 'shift', Number(e.target.value) as ShiftNumber)
+                              }
+                              className={`px-3 py-1.5 rounded text-xs font-bold font-['JetBrains_Mono'] focus:outline-none text-center ${
+                                hasEditPermission
+                                  ? 'bg-[#201f23] border border-[#524437] text-[#ffb86b] focus:border-[#ffb86b]'
+                                  : 'bg-[#17171a] border border-[#524437]/30 text-[#d7c3b2]/50 cursor-not-allowed'
+                              }`}
+                              title={hasEditPermission ? "Select shifts" : `Read-Only: Only ${site.code} IE can change shifts`}
+                            >
+                              <option value={0}>0 Shifts (Offline)</option>
+                              <option value={1}>1 Shift</option>
+                              <option value={2}>2 Shifts</option>
+                              <option value={3}>3 Shifts</option>
+                              <option value={4}>4 Shifts</option>
+                            </select>
+                          </td>
                           <td className="p-2.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <input
@@ -3190,12 +3382,15 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                 disabled={!hasEditPermission}
                                 value={item.dl}
                                 onChange={(e) => handleUpdateOtherSupportItem(item.id, 'dl', e.target.value)}
-                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-28 ${
+                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] w-24 ${
                                   hasEditPermission ? 'text-[#e5e1e6] focus:border-[#ffb86b]' : 'text-[#d7c3b2]/60 cursor-not-allowed opacity-80'
                                 }`}
                               />
                               <span className="text-[11px] text-[#d7c3b2]/60">DL</span>
                             </div>
+                          </td>
+                          <td className="p-2.5 text-right font-['JetBrains_Mono'] font-bold text-[#ffb86b] text-sm">
+                            {rowTotalDL} DL
                           </td>
                           <td className="p-2.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
@@ -3205,7 +3400,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                                 disabled={!hasEditPermission}
                                 value={item.idl}
                                 onChange={(e) => handleUpdateOtherSupportItem(item.id, 'idl', e.target.value)}
-                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-28 ${
+                                className={`data-table-input text-right font-bold font-['JetBrains_Mono'] text-[#5de6ff] w-24 ${
                                   hasEditPermission ? 'focus:border-[#5de6ff]' : 'cursor-not-allowed opacity-80'
                                 }`}
                               />
@@ -3247,8 +3442,14 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       <span className="material-symbols-outlined text-sm">summarize</span>
                       <span>Other Support Total Standard Manpower:</span>
                     </td>
-                    <td className="p-3 text-right text-[#e5e1e6]">
-                      {otherTotalDL} <span className="text-[10px] text-[#d7c3b2]/60 font-normal">DL</span>
+                    <td className="p-3 text-center text-[#d7c3b2]/60 text-[11px]">
+                      {otherSupportItems.filter((it) => (typeof it.shift === 'number' ? it.shift : 1) > 0).length} Active
+                    </td>
+                    <td className="p-3 text-right text-[#d7c3b2]/70">
+                      {otherSupportItems.reduce((s, it) => s + (Number(it.dl) || 0), 0)} <span className="text-[10px] font-normal">/ shift</span>
+                    </td>
+                    <td className="p-3 text-right text-[#ffb86b] font-bold">
+                      {otherTotalDL} <span className="text-[10px] font-normal">DL</span>
                     </td>
                     <td className="p-3 text-right text-[#5de6ff]">
                       {otherTotalIDL} <span className="text-[10px] text-[#5de6ff]/70 font-normal">IDL</span>

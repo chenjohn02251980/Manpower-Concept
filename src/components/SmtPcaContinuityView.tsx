@@ -217,14 +217,11 @@ export const SmtPcaContinuityView: React.FC<SmtPcaContinuityViewProps> = ({
       {/* Plant Filters & View Tabs */}
       <div className="bg-[#1C1D22] border border-[#524437]/70 rounded-xl p-4 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-xs font-['JetBrains_Mono'] text-[#d7c3b2]/90 flex items-center gap-1 font-semibold">
-              <span className="material-symbols-outlined text-sm text-[#38bdf8]">domain</span>
-              TAO Plant Units:
-            </span>
-            <span className="text-[10px] text-[#ffb86b] font-['JetBrains_Mono'] px-2 py-0.5 rounded bg-[#ffb86b]/10 border border-[#ffb86b]/30 font-medium">
-              TP05, TP08, TP11, TP12, TP15, TP16 are under TAO Plant
-            </span>
-            <div className="flex flex-wrap bg-[#131316] p-1 rounded-lg border border-[#524437]/60">
+          <span className="text-xs font-['JetBrains_Mono'] text-[#d7c3b2]/90 flex items-center gap-1 font-semibold">
+            <span className="material-symbols-outlined text-sm text-[#38bdf8]">domain</span>
+            Plant
+          </span>
+          <div className="flex flex-wrap bg-[#131316] p-1 rounded-lg border border-[#524437]/60">
               {(['ALL', 'TP05', 'TP08', 'TP11', 'TP12', 'TP15', 'TP16'] as const).map((p) => (
                 <button
                   key={p}

@@ -102,7 +102,10 @@ export function computeDepartmentTotalsFromSnapshot(snapshot: MonthDepartmentSna
   let qcDL: number;
   let qcIDL: number;
   if (snapshot.qualityControl?.items && snapshot.qualityControl.items.length > 0) {
-    qcDL = snapshot.qualityControl.items.reduce((acc, it) => acc + (Number(it.dl) || 0), 0);
+    qcDL = snapshot.qualityControl.items.reduce(
+      (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+      0
+    );
     qcIDL = snapshot.qualityControl.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0);
   } else {
     const pqcDL = snapshot.qualityControl?.pqcDL || 0;
@@ -115,16 +118,37 @@ export function computeDepartmentTotalsFromSnapshot(snapshot: MonthDepartmentSna
   }
 
   // 3. TROUBLE SHOOTING DL & IDL
-  const tsDL = snapshot.troubleShooting?.dlEntry || 0;
-  const tsIDL = snapshot.troubleShooting?.idlEntry || 0;
+  const tsDL = (snapshot.troubleShooting?.items && snapshot.troubleShooting.items.length > 0)
+    ? snapshot.troubleShooting.items.reduce(
+        (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+        0
+      )
+    : (snapshot.troubleShooting?.dlEntry || 0);
+  const tsIDL = (snapshot.troubleShooting?.items && snapshot.troubleShooting.items.length > 0)
+    ? snapshot.troubleShooting.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (snapshot.troubleShooting?.idlEntry || 0);
 
   // 4. WAREHOUSE DL & IDL
-  const whDL = snapshot.warehouse?.logisticsDL || 0;
-  const whIDL = snapshot.warehouse?.adminIDL || 0;
+  const whDL = (snapshot.warehouse?.items && snapshot.warehouse.items.length > 0)
+    ? snapshot.warehouse.items.reduce(
+        (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+        0
+      )
+    : (snapshot.warehouse?.logisticsDL || 0);
+  const whIDL = (snapshot.warehouse?.items && snapshot.warehouse.items.length > 0)
+    ? snapshot.warehouse.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (snapshot.warehouse?.adminIDL || 0);
 
   // 5. OTHER SUPPORT DL & IDL
-  const otherDL = snapshot.otherSupport?.dl || 0;
-  const otherIDL = snapshot.otherSupport?.generalIDL || 0;
+  const otherDL = (snapshot.otherSupport?.items && snapshot.otherSupport.items.length > 0)
+    ? snapshot.otherSupport.items.reduce(
+        (acc, it) => acc + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+        0
+      )
+    : (snapshot.otherSupport?.dl || 0);
+  const otherIDL = (snapshot.otherSupport?.items && snapshot.otherSupport.items.length > 0)
+    ? snapshot.otherSupport.items.reduce((acc, it) => acc + (Number(it.idl) || 0), 0)
+    : (snapshot.otherSupport?.generalIDL || 0);
 
   // Grand Totals
   const totalDL = mfgDL + qcDL + tsDL + whDL + otherDL;
@@ -170,9 +194,18 @@ export function extractSiteSnapshot(site: SiteData): MonthDepartmentSnapshot {
       ...site.qualityControl,
       items: site.qualityControl?.items ? JSON.parse(JSON.stringify(site.qualityControl.items)) : undefined,
     },
-    troubleShooting: { ...site.troubleShooting },
-    warehouse: { ...site.warehouse },
-    otherSupport: { ...site.otherSupport },
+    troubleShooting: {
+      ...site.troubleShooting,
+      items: site.troubleShooting?.items ? JSON.parse(JSON.stringify(site.troubleShooting.items)) : undefined,
+    },
+    warehouse: {
+      ...site.warehouse,
+      items: site.warehouse?.items ? JSON.parse(JSON.stringify(site.warehouse.items)) : undefined,
+    },
+    otherSupport: {
+      ...site.otherSupport,
+      items: site.otherSupport?.items ? JSON.parse(JSON.stringify(site.otherSupport.items)) : undefined,
+    },
   };
 }
 
@@ -346,9 +379,18 @@ export function applyMonthSnapshotToSite(site: SiteData, month: number): SiteDat
       ...s.qualityControl,
       items: s.qualityControl?.items ? JSON.parse(JSON.stringify(s.qualityControl.items)) : undefined,
     },
-    troubleShooting: { ...s.troubleShooting },
-    warehouse: { ...s.warehouse },
-    otherSupport: { ...s.otherSupport },
+    troubleShooting: {
+      ...s.troubleShooting,
+      items: s.troubleShooting?.items ? JSON.parse(JSON.stringify(s.troubleShooting.items)) : undefined,
+    },
+    warehouse: {
+      ...s.warehouse,
+      items: s.warehouse?.items ? JSON.parse(JSON.stringify(s.warehouse.items)) : undefined,
+    },
+    otherSupport: {
+      ...s.otherSupport,
+      items: s.otherSupport?.items ? JSON.parse(JSON.stringify(s.otherSupport.items)) : undefined,
+    },
   };
 }
 
@@ -397,9 +439,18 @@ export function updateSiteMonthData(
         ...updatedSnapshot.qualityControl,
         items: updatedSnapshot.qualityControl?.items ? JSON.parse(JSON.stringify(updatedSnapshot.qualityControl.items)) : undefined,
       },
-      troubleShooting: { ...updatedSnapshot.troubleShooting },
-      warehouse: { ...updatedSnapshot.warehouse },
-      otherSupport: { ...updatedSnapshot.otherSupport },
+      troubleShooting: {
+        ...updatedSnapshot.troubleShooting,
+        items: updatedSnapshot.troubleShooting?.items ? JSON.parse(JSON.stringify(updatedSnapshot.troubleShooting.items)) : undefined,
+      },
+      warehouse: {
+        ...updatedSnapshot.warehouse,
+        items: updatedSnapshot.warehouse?.items ? JSON.parse(JSON.stringify(updatedSnapshot.warehouse.items)) : undefined,
+      },
+      otherSupport: {
+        ...updatedSnapshot.otherSupport,
+        items: updatedSnapshot.otherSupport?.items ? JSON.parse(JSON.stringify(updatedSnapshot.otherSupport.items)) : undefined,
+      },
     };
   }
 
@@ -439,9 +490,18 @@ export function directUpdateDepartmentManpower(
       if (field === 'dl') {
         snapshot.qualityControl.oqcStandardDL = num;
         if (snapshot.qualityControl.items && snapshot.qualityControl.items.length > 0) {
-          const currentTotal = snapshot.qualityControl.items.reduce((s, it) => s + (Number(it.dl) || 0), 0);
+          const currentTotal = snapshot.qualityControl.items.reduce(
+            (s, it) => s + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+            0
+          );
           const diff = num - currentTotal;
-          snapshot.qualityControl.items[0].dl = Math.max(0, (Number(snapshot.qualityControl.items[0].dl) || 0) + diff);
+          const firstShift = typeof snapshot.qualityControl.items[0].shift === 'number' ? snapshot.qualityControl.items[0].shift : 1;
+          if (firstShift > 0) {
+            snapshot.qualityControl.items[0].dl = Math.max(0, Math.round((Number(snapshot.qualityControl.items[0].dl) || 0) + diff / firstShift));
+          } else {
+            snapshot.qualityControl.items[0].shift = 1;
+            snapshot.qualityControl.items[0].dl = Math.max(0, num);
+          }
         }
       } else {
         snapshot.qualityControl.oqcIndirectIDL = num;
@@ -455,22 +515,79 @@ export function directUpdateDepartmentManpower(
     case 'ts':
       if (field === 'dl') {
         snapshot.troubleShooting.dlEntry = num;
+        if (snapshot.troubleShooting.items && snapshot.troubleShooting.items.length > 0) {
+          const currentTotal = snapshot.troubleShooting.items.reduce(
+            (s, it) => s + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+            0
+          );
+          const diff = num - currentTotal;
+          const firstShift = typeof snapshot.troubleShooting.items[0].shift === 'number' ? snapshot.troubleShooting.items[0].shift : 1;
+          if (firstShift > 0) {
+            snapshot.troubleShooting.items[0].dl = Math.max(0, Math.round((Number(snapshot.troubleShooting.items[0].dl) || 0) + diff / firstShift));
+          } else {
+            snapshot.troubleShooting.items[0].shift = 1;
+            snapshot.troubleShooting.items[0].dl = Math.max(0, num);
+          }
+        }
       } else {
         snapshot.troubleShooting.idlEntry = num;
+        if (snapshot.troubleShooting.items && snapshot.troubleShooting.items.length > 0) {
+          const currentTotal = snapshot.troubleShooting.items.reduce((s, it) => s + (Number(it.idl) || 0), 0);
+          const diff = num - currentTotal;
+          snapshot.troubleShooting.items[0].idl = Math.max(0, (Number(snapshot.troubleShooting.items[0].idl) || 0) + diff);
+        }
       }
       break;
     case 'wh':
       if (field === 'dl') {
         snapshot.warehouse.logisticsDL = num;
+        if (snapshot.warehouse.items && snapshot.warehouse.items.length > 0) {
+          const currentTotal = snapshot.warehouse.items.reduce(
+            (s, it) => s + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+            0
+          );
+          const diff = num - currentTotal;
+          const firstShift = typeof snapshot.warehouse.items[0].shift === 'number' ? snapshot.warehouse.items[0].shift : 1;
+          if (firstShift > 0) {
+            snapshot.warehouse.items[0].dl = Math.max(0, Math.round((Number(snapshot.warehouse.items[0].dl) || 0) + diff / firstShift));
+          } else {
+            snapshot.warehouse.items[0].shift = 1;
+            snapshot.warehouse.items[0].dl = Math.max(0, num);
+          }
+        }
       } else {
         snapshot.warehouse.adminIDL = num;
+        if (snapshot.warehouse.items && snapshot.warehouse.items.length > 0) {
+          const currentTotal = snapshot.warehouse.items.reduce((s, it) => s + (Number(it.idl) || 0), 0);
+          const diff = num - currentTotal;
+          snapshot.warehouse.items[0].idl = Math.max(0, (Number(snapshot.warehouse.items[0].idl) || 0) + diff);
+        }
       }
       break;
     case 'other':
       if (field === 'dl') {
         snapshot.otherSupport.dl = num;
+        if (snapshot.otherSupport.items && snapshot.otherSupport.items.length > 0) {
+          const currentTotal = snapshot.otherSupport.items.reduce(
+            (s, it) => s + (Number(it.dl) || 0) * (typeof it.shift === 'number' ? it.shift : 1),
+            0
+          );
+          const diff = num - currentTotal;
+          const firstShift = typeof snapshot.otherSupport.items[0].shift === 'number' ? snapshot.otherSupport.items[0].shift : 1;
+          if (firstShift > 0) {
+            snapshot.otherSupport.items[0].dl = Math.max(0, Math.round((Number(snapshot.otherSupport.items[0].dl) || 0) + diff / firstShift));
+          } else {
+            snapshot.otherSupport.items[0].shift = 1;
+            snapshot.otherSupport.items[0].dl = Math.max(0, num);
+          }
+        }
       } else if (field === 'idl') {
         snapshot.otherSupport.generalIDL = num;
+        if (snapshot.otherSupport.items && snapshot.otherSupport.items.length > 0) {
+          const currentTotal = snapshot.otherSupport.items.reduce((s, it) => s + (Number(it.idl) || 0), 0);
+          const diff = num - currentTotal;
+          snapshot.otherSupport.items[0].idl = Math.max(0, (Number(snapshot.otherSupport.items[0].idl) || 0) + diff);
+        }
       }
       break;
   }

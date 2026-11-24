@@ -48,6 +48,7 @@ export type RackAssemblyLine = CpuAssemblyLine;
 export interface QualityControlItem {
   id: string;
   name: string;
+  shift?: ShiftNumber;
   dl: number;
   idl: number;
 }
@@ -70,6 +71,7 @@ export interface QualityControlData {
 export interface TroubleshootingItem {
   id: string;
   name: string;
+  shift?: ShiftNumber;
   dl: number;
   idl: number;
 }
@@ -84,6 +86,7 @@ export interface TroubleShootingData {
 export interface WarehouseItem {
   id: string;
   name: string;
+  shift?: ShiftNumber;
   dl: number;
   idl: number;
 }
@@ -98,6 +101,7 @@ export interface WarehouseData {
 export interface OtherSupportItem {
   id: string;
   name: string;
+  shift?: ShiftNumber;
   dl: number;
   idl: number;
 }
