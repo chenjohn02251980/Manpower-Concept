@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'aps_demand',
-      label: 'APS DEMAND',
+      label: 'DEMAND SCHEDULE',
       icon: 'precision_manufacturing',
       badge: 'DL VARIABLE',
       badgeColor: 'bg-[#38bdf8]/15 text-[#38bdf8] border-[#38bdf8]/35',

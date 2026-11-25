@@ -577,7 +577,7 @@ export const HtmlReportDownloadModal: React.FC<HtmlReportDownloadModalProps> = (
         <thead>
           <tr>
             <th>Department</th>
-            <th class="center">Cost Center (HR)</th>
+            <th class="center">Department Code (HR)</th>
             <th class="right">Independent Offline DL</th>
             <th class="right">Department IDL</th>
             <th class="right">Calculation Rule</th>
@@ -586,21 +586,21 @@ export const HtmlReportDownloadModal: React.FC<HtmlReportDownloadModalProps> = (
         <tbody>
           <tr>
             <td><strong>SMT Department</strong></td>
-            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.smtCostCenter, 'CC-SMT-7102')}</td>
+            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.smtCostCenter, 'DEPT-SMT-7102')}</td>
             <td class="mono right font-bold" style="color:var(--accent-gold);">${smtOfflineDL} DL</td>
             <td class="mono right" style="color:var(--accent-cyan);">${(currentSite.smtIdl || 0) * multiplier} IDL</td>
             <td class="text-muted">Independent calculation (not included in line-level DL)</td>
           </tr>
           <tr>
             <td><strong>PCA Department</strong></td>
-            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.pcaCostCenter, 'CC-PCA-7105')}</td>
+            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.pcaCostCenter, 'DEPT-PCA-7105')}</td>
             <td class="mono right font-bold" style="color:var(--accent-gold);">${pcaOfflineDL} DL</td>
             <td class="mono right" style="color:var(--accent-cyan);">${(currentSite.pcaIdl || 0) * multiplier} IDL</td>
             <td class="text-muted">Independent calculation (not included in line-level DL)</td>
           </tr>
           <tr>
             <td><strong>System Assembly Department</strong></td>
-            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.assemblyCostCenter, 'CC-SYS-7110')}</td>
+            <td class="mono center" style="color:var(--accent-purple);">${formatCostCenterText(currentSite.assemblyCostCenter, 'DEPT-SYS-7110')}</td>
             <td class="mono right font-bold" style="color:var(--accent-gold);">${assyOfflineDL} DL</td>
             <td class="mono right" style="color:var(--accent-cyan);">${(currentSite.assemblyIdl || 0) * multiplier} IDL</td>
             <td class="text-muted">Independent calculation (not included in line-level DL)</td>

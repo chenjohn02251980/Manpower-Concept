@@ -104,9 +104,19 @@ export default function App() {
             continue;
           }
           const initSite = INITIAL_SITES[key] || INITIAL_SITES.tao;
+          const migrateCodeField = (val: string | string[] | undefined): string | string[] | undefined => {
+            if (!val) return val;
+            if (Array.isArray(val)) {
+              return val.map((s) => String(s).trim().replace(/^CC-(SMT|PCA|SYS|QC|TS|WH|OTH)-/i, 'DEPT-$1-'));
+            }
+            return String(val).replace(/CC-(SMT|PCA|SYS|QC|TS|WH|OTH)-/gi, 'DEPT-$1-');
+          };
           normalized[key] = {
             ...initSite,
             ...site,
+            smtCostCenter: migrateCodeField(site.smtCostCenter) ?? initSite.smtCostCenter,
+            pcaCostCenter: migrateCodeField(site.pcaCostCenter) ?? initSite.pcaCostCenter,
+            assemblyCostCenter: migrateCodeField(site.assemblyCostCenter) ?? initSite.assemblyCostCenter,
             plants: site.plants ?? initSite.plants,
             plantNote: site.plantNote ?? initSite.plantNote,
             yearlyBudgetManpower: site.yearlyBudgetManpower ?? initSite.yearlyBudgetManpower ?? 1290,
@@ -156,8 +166,11 @@ export default function App() {
             qualityControl: {
               ...initSite.qualityControl,
               ...(site.qualityControl || {}),
-              pqcCostCenter: site.qualityControl?.pqcCostCenter ?? initSite.qualityControl?.pqcCostCenter,
-              oqcCostCenter: site.qualityControl?.oqcCostCenter ?? initSite.qualityControl?.oqcCostCenter,
+              costCenter:
+                migrateCodeField(site.qualityControl?.costCenter) ??
+                initSite.qualityControl?.costCenter,
+              pqcCostCenter: migrateCodeField(site.qualityControl?.pqcCostCenter) ?? initSite.qualityControl?.pqcCostCenter,
+              oqcCostCenter: migrateCodeField(site.qualityControl?.oqcCostCenter) ?? initSite.qualityControl?.oqcCostCenter,
               pqcDL: site.qualityControl?.pqcDL ?? 0,
               pqcIDL:
                 site.qualityControl?.pqcIDL ??
@@ -172,7 +185,7 @@ export default function App() {
             troubleShooting: {
               ...initSite.troubleShooting,
               ...(site.troubleShooting || {}),
-              costCenter: site.troubleShooting?.costCenter ?? initSite.troubleShooting?.costCenter,
+              costCenter: migrateCodeField(site.troubleShooting?.costCenter) ?? initSite.troubleShooting?.costCenter,
               items: site.troubleShooting?.items
                 ? site.troubleShooting.items.map((it: any) => ({
                     ...it,
@@ -183,7 +196,7 @@ export default function App() {
             warehouse: {
               ...initSite.warehouse,
               ...(site.warehouse || {}),
-              costCenter: site.warehouse?.costCenter ?? initSite.warehouse?.costCenter,
+              costCenter: migrateCodeField(site.warehouse?.costCenter) ?? initSite.warehouse?.costCenter,
               items: site.warehouse?.items
                 ? site.warehouse.items.map((it: any) => ({
                     ...it,
@@ -194,7 +207,7 @@ export default function App() {
             otherSupport: {
               ...initSite.otherSupport,
               ...(site.otherSupport || {}),
-              costCenter: site.otherSupport?.costCenter ?? initSite.otherSupport?.costCenter,
+              costCenter: migrateCodeField(site.otherSupport?.costCenter) ?? initSite.otherSupport?.costCenter,
               items: site.otherSupport?.items
                 ? site.otherSupport.items.map((it: any) => ({
                     ...it,
@@ -369,6 +382,7 @@ export default function App() {
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}
               currentSite={currentSite}
+              sites={sites}
               activeTab={activeTab}
             />
           )}
@@ -409,6 +423,7 @@ export default function App() {
                   selectedYear={selectedYear}
                   selectedMonth={selectedMonth}
                   currentSite={currentSite}
+                  sites={sites}
                   activeTab={activeTab}
                 />
               }
@@ -431,6 +446,7 @@ export default function App() {
           {activeTab === 'hr_actual' && (
             <HrActualView
               site={currentSite}
+              sites={sites}
               timePeriod={timePeriod}
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}

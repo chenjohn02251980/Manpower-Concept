@@ -4,61 +4,15 @@ import { CostCenterMultiPicker, CostCenterPreset } from './CostCenterMultiPicker
 import { IEHistoricalManpowerOverview } from './IEHistoricalManpowerOverview';
 import { FiveDepartmentMonthlyMaintenance } from './FiveDepartmentMonthlyMaintenance';
 import { extractSiteSnapshot, updateSiteMonthData } from '../utils/monthlyDepartmentHelper';
+import { getHrPresetsForProcess, getSiteDepartmentCodes } from '../utils/hrDatabase';
 
-const SMT_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-SMT-7101', label: 'SMT MB Line Group A' },
-  { code: 'CC-SMT-7102', label: 'SMT MB Line Group B' },
-  { code: 'CC-SMT-7105', label: 'SMT Small-card Cell' },
-  { code: 'CC-SMT-7109', label: 'SMT Prototype & NPI' },
-];
-
-const PCA_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-PCA-7101', label: 'PCA FA Test Cell A' },
-  { code: 'CC-PCA-7105', label: 'PCA Board Functional Test' },
-  { code: 'CC-PCA-7108', label: 'PCA Small-Card Packing' },
-  { code: 'CC-PCA-7112', label: 'PCA ICT & Burn-in Cell' },
-];
-
-const ASSEMBLY_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-SYS-7110', label: 'System Assembly Main Line' },
-  { code: 'CC-SYS-7115', label: 'Server Integration & Test' },
-  { code: 'CC-SYS-7120', label: 'Chassis Final Packaging' },
-  { code: 'CC-SYS-7125', label: 'Rack & Stack Custom Config' },
-];
-
-const QC_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-QC-7201', label: 'PQC Line Audit Team' },
-  { code: 'CC-QC-7202', label: 'SQC Sampling & Reliability' },
-  { code: 'CC-QC-7205', label: 'In-Process Quality Inspection' },
-  { code: 'CC-QC-7210', label: 'OQC Outgoing Inspection' },
-  { code: 'CC-QC-7215', label: 'Finished Goods QA & Audit' },
-  { code: 'CC-QC-7220', label: 'Customer Quality Assurance (CQA)' },
-  { code: 'CC-QC-7225', label: 'IQC Incoming Inspection & Lab' },
-];
-
-const PQC_HR_PRESETS = QC_HR_PRESETS;
-const OQC_HR_PRESETS = QC_HR_PRESETS;
-
-const TROUBLESHOOTING_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-TS-7301', label: 'Trouble Shooting Debug Lab' },
-  { code: 'CC-TS-7302', label: 'BGA & Board Repair Cell' },
-  { code: 'CC-TS-7305', label: 'Failure Analysis (FA) & RMA' },
-  { code: 'CC-TS-7308', label: 'Test Diagnostic & Fixture Lab' },
-];
-
-const WAREHOUSE_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-WH-7401', label: 'Raw Materials & Receiving Hub' },
-  { code: 'CC-WH-7402', label: 'WIP Inventory & Internal Logistics' },
-  { code: 'CC-WH-7405', label: 'Finished Goods & Shipping Center' },
-  { code: 'CC-WH-7408', label: 'Customs & Bonded Warehouse' },
-];
-
-const OTHER_SUPPORT_HR_PRESETS: CostCenterPreset[] = [
-  { code: 'CC-OTH-7501', label: 'Plant Facility & Cleanroom Ops' },
-  { code: 'CC-OTH-7502', label: 'EHS & Industrial Safety Dept' },
-  { code: 'CC-OTH-7505', label: 'General Administration & Affairs' },
-  { code: 'CC-OTH-7508', label: 'Plant Security & Facilities' },
-];
+const SMT_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('SMT');
+const PCA_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('PCA');
+const ASSEMBLY_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('System Assembly');
+const QC_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('Quality');
+const TROUBLESHOOTING_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('Troubleshooting');
+const WAREHOUSE_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('Warehouse');
+const OTHER_SUPPORT_HR_PRESETS: CostCenterPreset[] = getHrPresetsForProcess('Other Support');
 
 interface IEForecastViewProps {
   site: SiteData;
@@ -1230,10 +1184,10 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   <CostCenterMultiPicker
                     id="input-smt-cost-center"
                     departmentName="SMT"
-                    value={site.smtCostCenter}
+                    value={getSiteDepartmentCodes(site, 'SMT')}
                     onChange={handleSmtCostCenterChange}
                     hrPresets={SMT_HR_PRESETS}
-                    placeholder="e.g. CC-SMT-7102"
+                    placeholder="e.g. DEPT-SMT-7102"
                     disabled={!hasEditPermission}
                   />
 
@@ -1533,10 +1487,10 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   <CostCenterMultiPicker
                     id="input-pca-cost-center"
                     departmentName="PCA"
-                    value={site.pcaCostCenter}
+                    value={getSiteDepartmentCodes(site, 'PCA')}
                     onChange={handlePcaCostCenterChange}
                     hrPresets={PCA_HR_PRESETS}
-                    placeholder="e.g. CC-PCA-7105"
+                    placeholder="e.g. DEPT-PCA-7105"
                     disabled={!hasEditPermission}
                   />
 
@@ -1923,10 +1877,10 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   <CostCenterMultiPicker
                     id="input-assembly-cost-center"
                     departmentName="System Assembly"
-                    value={site.assemblyCostCenter}
+                    value={getSiteDepartmentCodes(site, 'System Assembly')}
                     onChange={handleAssemblyCostCenterChange}
                     hrPresets={ASSEMBLY_HR_PRESETS}
-                    placeholder="e.g. CC-SYS-7110"
+                    placeholder="e.g. DEPT-SYS-7110"
                     disabled={!hasEditPermission}
                   />
 
@@ -2591,7 +2545,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   <CostCenterMultiPicker
                     id="input-qc-cost-center"
                     departmentName="Quality Control"
-                    value={site.qualityControl.costCenter || site.qualityControl.pqcCostCenter}
+                    value={getSiteDepartmentCodes(site, 'Quality')}
                     onChange={(val) =>
                       onUpdateSite({
                         ...site,
@@ -2602,7 +2556,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                       })
                     }
                     hrPresets={QC_HR_PRESETS}
-                    placeholder="e.g. CC-QC-7201"
+                    placeholder="e.g. DEPT-QC-7201"
                     disabled={!hasEditPermission}
                   />
 
@@ -2881,7 +2835,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                         <CostCenterMultiPicker
                           id="input-troubleshooting-cost-center"
                           departmentName="Trouble Shooting"
-                          value={site.troubleShooting.costCenter}
+                          value={getSiteDepartmentCodes(site, 'Troubleshooting')}
                           onChange={(val) =>
                             onUpdateSite({
                               ...site,
@@ -2892,7 +2846,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                             })
                           }
                           hrPresets={TROUBLESHOOTING_HR_PRESETS}
-                          placeholder="e.g. CC-TS-7301"
+                          placeholder="e.g. DEPT-TS-7301"
                           disabled={!hasEditPermission}
                         />
 
@@ -3140,7 +3094,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
               <CostCenterMultiPicker
                 id="input-warehouse-cost-center"
                 departmentName="Warehouse Logistic"
-                value={site.warehouse.costCenter}
+                value={getSiteDepartmentCodes(site, 'Warehouse')}
                 onChange={(val) =>
                   onUpdateSite({
                     ...site,
@@ -3151,7 +3105,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   })
                 }
                 hrPresets={WAREHOUSE_HR_PRESETS}
-                placeholder="e.g. CC-WH-7401"
+                placeholder="e.g. DEPT-WH-7401"
                 disabled={!hasEditPermission}
               />
 
@@ -3399,7 +3353,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
               <CostCenterMultiPicker
                 id="input-othersupport-cost-center"
                 departmentName="Other Support"
-                value={site.otherSupport.costCenter}
+                value={getSiteDepartmentCodes(site, 'Other Support')}
                 onChange={(val) =>
                   onUpdateSite({
                     ...site,
@@ -3410,7 +3364,7 @@ export const IEForecastView: React.FC<IEForecastViewProps> = ({
                   })
                 }
                 hrPresets={OTHER_SUPPORT_HR_PRESETS}
-                placeholder="e.g. CC-OTH-7501"
+                placeholder="e.g. DEPT-OTH-7501"
                 disabled={!hasEditPermission}
               />
 

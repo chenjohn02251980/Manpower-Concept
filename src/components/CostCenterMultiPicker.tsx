@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { normalizeDepartmentCode, parseDepartmentCodes } from '../utils/hrDatabase';
 
 export interface CostCenterPreset {
   code: string;
@@ -6,12 +7,7 @@ export interface CostCenterPreset {
 }
 
 export const parseCostCenters = (val?: string | string[]): string[] => {
-  if (!val) return [];
-  if (Array.isArray(val)) return val.filter(Boolean);
-  return String(val)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return parseDepartmentCodes(val);
 };
 
 interface CostCenterMultiPickerProps {
@@ -29,7 +25,7 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
   value,
   onChange,
   hrPresets,
-  placeholder = 'e.g. CC-SMT-7102',
+  placeholder = 'e.g. DEPT-SMT-7102',
   departmentName,
   disabled = false,
 }) => {
@@ -40,7 +36,7 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
   const handleAddTokens = (text: string) => {
     const rawTokens = text
       .split(',')
-      .map((t) => t.trim())
+      .map((t) => normalizeDepartmentCode(t))
       .filter(Boolean);
 
     if (rawTokens.length === 0) return;
@@ -92,15 +88,15 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
           }`}
           title={
             disabled
-              ? `${departmentName} Cost Center (唯讀)`
-              : `${departmentName} Cost Center (Synced with HR System)`
+              ? `${departmentName} Department Code (唯讀)`
+              : `${departmentName} Department Code (HR Database Filter for Budget & Paid Manpower)`
           }
           onClick={() => !disabled && setIsOpen(!isOpen)}
         >
           <span className="material-symbols-outlined text-[13px] text-[#a78bfa] leading-none">
             {disabled ? 'lock' : 'badge'}
           </span>
-          Cost Center:
+          Department Code:
         </label>
 
         {/* Dropdown View & Select Button */}
@@ -114,8 +110,8 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
           }`}
           title={
             disabled
-              ? '無維護權限（僅該廠 IE 可設定 Cost Center）'
-              : 'Click to view entered cost centers or select from HR list'
+              ? '無維護權限（僅該廠 IE 可設定 Department Code）'
+              : 'Click to view or select Department Codes for HR database filtering'
           }
         >
           <span className="font-bold text-[#a78bfa] truncate">
@@ -134,7 +130,7 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
           <div className="flex items-center justify-between text-[11px] text-[#d7c3b2]/90 font-['JetBrains_Mono'] border-b border-[#524437]/40 pb-1.5">
             <span className="font-semibold text-[#a78bfa] flex items-center gap-1">
               <span className="material-symbols-outlined text-xs text-[#a78bfa]">format_list_bulleted</span>
-              {departmentName} Cost Centers ({currentList.length})
+              {departmentName} Department Codes ({currentList.length})
             </span>
             <button
               type="button"
@@ -145,14 +141,14 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
             </button>
           </div>
 
-          {/* Current Assigned Cost Centers */}
+          {/* Current Assigned Department Codes */}
           <div className="space-y-1">
             <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/60 uppercase tracking-wider block">
-              Currently Assigned:
+              Currently Assigned (HR DB Filter):
             </span>
             {currentList.length === 0 ? (
               <div className="text-[11px] font-['JetBrains_Mono'] text-[#d7c3b2]/40 italic py-1 px-2 bg-[#131316] rounded border border-[#524437]/30">
-                No cost center assigned yet
+                No department code assigned yet
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-[#131316] rounded border border-[#524437]/30">
@@ -179,7 +175,7 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
           {/* Custom Input Addition */}
           <div className="space-y-1">
             <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/60 uppercase tracking-wider block">
-              Add Custom Code:
+              Add Department Code:
             </span>
             <div className="flex items-center gap-1.5">
               <input
@@ -209,7 +205,7 @@ export const CostCenterMultiPicker: React.FC<CostCenterMultiPickerProps> = ({
           {/* HR Catalog Presets List */}
           <div className="space-y-1">
             <span className="text-[10px] font-['JetBrains_Mono'] text-[#d7c3b2]/60 uppercase tracking-wider block">
-              Select from HR Catalog:
+              Select from HR Department Database:
             </span>
             <div className="grid grid-cols-1 gap-1 max-h-36 overflow-y-auto pr-1">
               {hrPresets.map((preset) => {

@@ -56,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'overview':
         return 'Executive Overview';
       case 'aps_demand':
-        return 'APS Demand Schedule';
+        return 'Demand Schedule';
       case 'hr_actual':
         return 'HR Actual Headcounts';
       case 'global_feedback':

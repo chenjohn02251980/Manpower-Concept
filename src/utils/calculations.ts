@@ -256,16 +256,34 @@ export function calculateOverallSite(sites: Record<string, SiteData>): SiteData 
   const osDl = siteList.reduce((sum, s) => sum + (s.otherSupport?.dl || 0), 0);
   const osIdl = siteList.reduce((sum, s) => sum + (s.otherSupport?.generalIDL || 0), 0);
 
-  // Distinct Cost Centers
-  const parseCC = (val?: string | string[]): string[] => {
+  // Distinct Department Codes
+  const parseDeptCodes = (val?: string | string[]): string[] => {
     if (!val) return [];
-    if (Array.isArray(val)) return val.filter(Boolean);
-    return String(val).split(',').map((s) => s.trim()).filter(Boolean);
+    const arr = Array.isArray(val) ? val : String(val).split(',');
+    return arr
+      .map((s) => s.trim().toUpperCase().replace(/^CC-(SMT|PCA|SYS|QC|TS|WH|OTH)-/, 'DEPT-$1-'))
+      .filter(Boolean);
   };
 
-  const smtCostCenter = Array.from(new Set(siteList.flatMap((s) => parseCC(s.smtCostCenter))));
-  const pcaCostCenter = Array.from(new Set(siteList.flatMap((s) => parseCC(s.pcaCostCenter))));
-  const assemblyCostCenter = Array.from(new Set(siteList.flatMap((s) => parseCC(s.assemblyCostCenter))));
+  const smtCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.smtCostCenter))));
+  const pcaCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.pcaCostCenter))));
+  const assemblyCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.assemblyCostCenter))));
+  const qcCostCenter = Array.from(
+    new Set(
+      siteList.flatMap((s) =>
+        parseDeptCodes(
+          s.qualityControl?.costCenter ??
+            [
+              ...parseDeptCodes(s.qualityControl?.pqcCostCenter),
+              ...parseDeptCodes(s.qualityControl?.oqcCostCenter),
+            ]
+        )
+      )
+    )
+  );
+  const tsCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.troubleShooting?.costCenter))));
+  const whCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.warehouse?.costCenter))));
+  const otherCostCenter = Array.from(new Set(siteList.flatMap((s) => parseDeptCodes(s.otherSupport?.costCenter))));
 
   const monthlyBudgets: Record<number, { total: number; dl: number; idl: number }> = {};
   for (let m = 1; m <= 12; m++) {
@@ -303,16 +321,17 @@ export function calculateOverallSite(sites: Record<string, SiteData>): SiteData 
     smtIdlShift,
     pcaIdlShift,
     assemblyIdlShift,
-    smtCostCenter: smtCostCenter.length > 0 ? smtCostCenter : 'CC-ALL-SMT',
-    pcaCostCenter: pcaCostCenter.length > 0 ? pcaCostCenter : 'CC-ALL-PCA',
-    assemblyCostCenter: assemblyCostCenter.length > 0 ? assemblyCostCenter : 'CC-ALL-SYS',
+    smtCostCenter: smtCostCenter.length > 0 ? smtCostCenter : ['DEPT-SMT-7102'],
+    pcaCostCenter: pcaCostCenter.length > 0 ? pcaCostCenter : ['DEPT-PCA-7105'],
+    assemblyCostCenter: assemblyCostCenter.length > 0 ? assemblyCostCenter : ['DEPT-SYS-7110'],
     smtLines,
     pcaLines,
     cpuAssemblyLines,
     rackAssemblyLines,
     qualityControl: {
-      pqcCostCenter: 'CC-ALL-QC',
-      oqcCostCenter: 'CC-ALL-OQC',
+      costCenter: qcCostCenter.length > 0 ? qcCostCenter : ['DEPT-QC-7201', 'DEPT-QC-7210'],
+      pqcCostCenter: 'DEPT-QC-7201',
+      oqcCostCenter: 'DEPT-QC-7210',
       pqcDL,
       pqcIDL,
       pqcDayShift,
@@ -321,14 +340,17 @@ export function calculateOverallSite(sites: Record<string, SiteData>): SiteData 
       oqcIndirectIDL,
     },
     troubleShooting: {
+      costCenter: tsCostCenter.length > 0 ? tsCostCenter : ['DEPT-TS-7301'],
       dlEntry: tsDl,
       idlEntry: tsIdl,
     },
     warehouse: {
+      costCenter: whCostCenter.length > 0 ? whCostCenter : ['DEPT-WH-7401'],
       logisticsDL: whDl,
       adminIDL: whIdl,
     },
     otherSupport: {
+      costCenter: otherCostCenter.length > 0 ? otherCostCenter : ['DEPT-OTH-7501'],
       dl: osDl,
       generalIDL: osIdl,
       dlNA: '-',

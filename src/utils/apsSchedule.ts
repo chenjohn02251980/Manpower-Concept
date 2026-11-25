@@ -1,5 +1,11 @@
 import { SiteData, MonthlyApsPlan, DailyLineSchedule, CostCenterPayrollWeekly } from '../types';
-import { parseCostCenters } from '../components/CostCenterMultiPicker';
+import {
+  MONTHLY_BUDGET_FACTORS,
+  computePlantGapActionPlan,
+  getBaseMonthlyBudgetManpower,
+  queryHrDatabaseBySite,
+  HrDatabaseQueryResult,
+} from './hrDatabase';
 import { AUGUST_SMT_LINE_SUMMARIES } from '../data/apsSmtPcaSchedule';
 import {
   APS_MASTER_MONTHS,
@@ -952,278 +958,68 @@ export function generateOverallApsPlan(
   };
 }
 
-export function computePlantGapActionPlan(
+export { computePlantGapActionPlan, MONTHLY_BUDGET_FACTORS };
+
+export function querySiteHrManpower(
   site: SiteData,
-  process: 'SMT' | 'PCA' | 'System Assembly' | 'Quality' | 'Troubleshooting' | 'Warehouse',
-  varianceDL: number
-): string {
-  if (varianceDL === 0) {
-    if (site.id === 'tao' || (site.plants && site.plants.length > 0)) {
-      if (process === 'SMT' || process === 'PCA') return 'Plant capacity balanced: TP05 / TP08 (No Gap)';
-      if (process === 'System Assembly') return 'Plant capacity balanced: TP08 / TP15 / TP16 (No Gap)';
-      return 'Plant capacity balanced: TP08 / TP15 (No Gap)';
-    }
-    return `Plant capacity balanced: ${site.name} (No Gap)`;
-  }
-
-  const isDeficit = varianceDL < 0;
-  const prefix = isDeficit ? 'Deficit Plants: ' : 'Surplus Plants: ';
-  const sign = isDeficit ? '' : '+';
-
-  // TAO or sites with sub-plants TP05, TP08, TP15, TP16
-  if (site.id === 'tao' || (site.plants && site.plants.length > 0)) {
-    if (process === 'System Assembly') {
-      if (Math.abs(varianceDL) <= 4) {
-        const g1 = Math.round(varianceDL * 0.5);
-        const g2 = varianceDL - g1;
-        return `${prefix}TP08 (${sign}${g1} DL), TP15 (${sign}${g2} DL)`;
-      } else {
-        const g1 = Math.round(varianceDL * 0.45);
-        const g2 = Math.round(varianceDL * 0.35);
-        const g3 = varianceDL - g1 - g2;
-        return `${prefix}TP08 (${sign}${g1} DL), TP15 (${sign}${g2} DL), TP16 (${sign}${g3} DL)`;
+  selectedYear: number,
+  selectedMonth: number,
+  allSites?: Record<string, SiteData>,
+  filterDeptCodes?: string[]
+): { apsPlan: MonthlyApsPlan } & HrDatabaseQueryResult {
+  const perSitePlans: Record<string, MonthlyApsPlan> = {};
+  if (site.id === 'overall' && allSites) {
+    for (const s of Object.values(allSites)) {
+      if (s.id !== 'overall') {
+        perSitePlans[s.id] = generateMonthlyApsPlan(s, selectedYear, selectedMonth);
       }
     }
-
-    if (process === 'SMT' || process === 'PCA') {
-      const g1 = Math.round(varianceDL * 0.6);
-      const g2 = varianceDL - g1;
-      return `${prefix}TP05 (${sign}${g1} DL), TP08 (${sign}${g2} DL)`;
-    }
-
-    if (process === 'Quality' || process === 'Troubleshooting') {
-      const g1 = Math.round(varianceDL * 0.6);
-      const g2 = varianceDL - g1;
-      return g2 !== 0
-        ? `${prefix}TP08 (${sign}${g1} DL), TP15 (${sign}${g2} DL)`
-        : `${prefix}TP08 (${sign}${g1} DL)`;
-    }
-
-    if (process === 'Warehouse') {
-      const g1 = Math.round(varianceDL * 0.7);
-      const g2 = varianceDL - g1;
-      return g2 !== 0
-        ? `${prefix}TP15 (${sign}${g1} DL), TP08 (${sign}${g2} DL)`
-        : `${prefix}TP15 (${sign}${g1} DL)`;
-    }
   }
+  const apsPlan =
+    site.id === 'overall' && allSites
+      ? generateOverallApsPlan(allSites, selectedYear, selectedMonth)
+      : generateMonthlyApsPlan(site, selectedYear, selectedMonth);
 
-  if (site.id === 'overall') {
-    // Top manufacturing sites contributing to enterprise gap
-    if (process === 'System Assembly') {
-      const g1 = Math.round(varianceDL * 0.4);
-      const g2 = Math.round(varianceDL * 0.35);
-      const g3 = varianceDL - g1 - g2;
-      return `${prefix}TAO (${sign}${g1} DL), IME1 (${sign}${g2} DL), SQT (${sign}${g3} DL)`;
-    }
-    if (process === 'SMT' || process === 'PCA') {
-      const g1 = Math.round(varianceDL * 0.55);
-      const g2 = varianceDL - g1;
-      return `${prefix}TAO (${sign}${g1} DL), IME1 (${sign}${g2} DL)`;
-    }
-    return `${prefix}TAO (${sign}${varianceDL} DL)`;
-  }
+  const hrResult = queryHrDatabaseBySite(
+    site,
+    apsPlan,
+    selectedMonth,
+    allSites,
+    Object.keys(perSitePlans).length > 0 ? perSitePlans : undefined,
+    filterDeptCodes
+  );
 
-  // Other individual sites
-  return `${prefix}${site.name} (${sign}${varianceDL} DL)`;
+  return {
+    apsPlan,
+    ...hrResult,
+  };
 }
 
 export function generateCostCenterPayrollData(
   site: SiteData,
-  apsPlan: MonthlyApsPlan
+  apsPlan: MonthlyApsPlan,
+  allSites?: Record<string, SiteData>,
+  filterDeptCodes?: string[]
 ): CostCenterPayrollWeekly[] {
-  // SMT Process Cost Centers
-  const smtCC = parseCostCenters(site.smtCostCenter);
-  const smtApsDL = apsPlan.smtOnlineDL + (apsPlan.smtOfflineDL ?? site.smtOfflineDL ?? 0);
-  const rawSmtMonthEndDL = Math.round(smtApsDL * 1.02);
-
-  // PCA Process Cost Centers
-  const pcaCC = parseCostCenters(site.pcaCostCenter);
-  const pcaApsDL = apsPlan.pcaOnlineDL + (apsPlan.pcaOfflineDL ?? site.pcaOfflineDL ?? 0);
-  const rawPcaMonthEndDL = Math.round(pcaApsDL * 0.97);
-
-  // System Assembly Process Cost Centers
-  const sysCC = parseCostCenters(site.assemblyCostCenter);
-  const sysApsDL = apsPlan.assemblyOnlineDL + (apsPlan.assemblyOfflineDL ?? site.assemblyOfflineDL ?? 0);
-  const rawSysMonthEndDL = Math.round(sysApsDL * 0.98);
-
-  // Quality Control
-  const qcCC = parseCostCenters(site.qualityControl?.oqcCostCenter);
-  const qcApsDL = apsPlan.qcDL ?? ((site.qualityControl?.pqcDL || 0) + (site.qualityControl?.oqcStandardDL || 0));
-  const rawQcMonthEndDL = qcApsDL;
-
-  // Trouble Shooting
-  const tsCC = ['CC-TS-7301'];
-  const tsApsDL = apsPlan.tsDL ?? (site.troubleShooting?.dlEntry || 0);
-  const rawTsMonthEndDL = tsApsDL;
-
-  // Warehouse Logistics
-  const whCC = ['CC-WH-7401'];
-  const whApsDL = apsPlan.whDL ?? (site.warehouse?.logisticsDL || 0);
-  const rawWhMonthEndDL = Math.max(0, whApsDL + 1);
-
-  // Normalize department monthEndDL figures so their total matches site.actualHrDL exactly
-  let smtMonthEndDL = rawSmtMonthEndDL;
-  let pcaMonthEndDL = rawPcaMonthEndDL;
-  let sysMonthEndDL = rawSysMonthEndDL;
-  let qcMonthEndDL = rawQcMonthEndDL;
-  let tsMonthEndDL = rawTsMonthEndDL;
-  let whMonthEndDL = rawWhMonthEndDL;
-
-  if (site.actualHrDL && site.actualHrDL > 0) {
-    const rawTotal = smtMonthEndDL + pcaMonthEndDL + sysMonthEndDL + qcMonthEndDL + tsMonthEndDL + whMonthEndDL;
-    if (rawTotal > 0) {
-      const scale = site.actualHrDL / rawTotal;
-      smtMonthEndDL = Math.round(smtMonthEndDL * scale);
-      pcaMonthEndDL = Math.round(pcaMonthEndDL * scale);
-      qcMonthEndDL = Math.round(qcMonthEndDL * scale);
-      tsMonthEndDL = Math.round(tsMonthEndDL * scale);
-      whMonthEndDL = Math.round(whMonthEndDL * scale);
-      sysMonthEndDL = Math.max(0, site.actualHrDL - (smtMonthEndDL + pcaMonthEndDL + qcMonthEndDL + tsMonthEndDL + whMonthEndDL));
+  const month = apsPlan.planningMonth || 9;
+  const year = apsPlan.planningYear || 2026;
+  const perSitePlans: Record<string, MonthlyApsPlan> = {};
+  if (site.id === 'overall' && allSites) {
+    for (const s of Object.values(allSites)) {
+      if (s.id !== 'overall') {
+        perSitePlans[s.id] = generateMonthlyApsPlan(s, year, month);
+      }
     }
   }
 
-  const smtW1 = smtMonthEndDL - 4;
-  const smtW2 = smtMonthEndDL - 2;
-  const smtW3 = smtMonthEndDL;
-  const smtW4 = smtMonthEndDL + 1;
-
-  const pcaW1 = pcaMonthEndDL - 3;
-  const pcaW2 = pcaMonthEndDL - 1;
-  const pcaW3 = pcaMonthEndDL;
-  const pcaW4 = pcaMonthEndDL;
-
-  const sysW1 = sysMonthEndDL - 6;
-  const sysW2 = sysMonthEndDL - 3;
-  const sysW3 = sysMonthEndDL - 1;
-  const sysW4 = sysMonthEndDL;
-
-  const qcW1 = qcMonthEndDL;
-  const qcW2 = qcMonthEndDL;
-  const qcW3 = qcMonthEndDL;
-  const qcW4 = qcMonthEndDL;
-
-  const tsW1 = tsMonthEndDL;
-  const tsW2 = tsMonthEndDL;
-  const tsW3 = tsMonthEndDL;
-  const tsW4 = tsMonthEndDL;
-
-  const whW1 = whMonthEndDL;
-  const whW2 = whMonthEndDL;
-  const whW3 = whMonthEndDL;
-  const whW4 = whMonthEndDL;
-
-  const makeRow = (
-    dept: string,
-    process: 'SMT' | 'PCA' | 'System Assembly' | 'Quality' | 'Troubleshooting' | 'Warehouse',
-    ccs: string[],
-    w1: number,
-    w2: number,
-    w3: number,
-    w4: number,
-    monthEnd: number,
-    apsDL: number,
-    attendanceRate: string
-  ): CostCenterPayrollWeekly => {
-    const variance = monthEnd - apsDL;
-    let status: 'SURPLUS' | 'BALANCED' | 'DEFICIT' = 'BALANCED';
-    if (variance < 0) {
-      status = 'DEFICIT';
-    } else if (variance > 0) {
-      status = 'SURPLUS';
-    }
-    const actionNeeded = computePlantGapActionPlan(site, process, variance);
-    return {
-      department: dept,
-      processType: process,
-      costCenters: ccs.length > 0 ? ccs : [`CC-${process.slice(0, 3).toUpperCase()}-DEFAULT`],
-      w1DL: w1,
-      w2DL: w2,
-      w3DL: w3,
-      w4DL: w4,
-      monthEndDL: monthEnd,
-      attendanceRate,
-      apsDemandDL: apsDL,
-      varianceDL: variance,
-      status,
-      actionNeeded,
-    };
-  };
-
-  return [
-    makeRow(
-      'SMT',
-      'SMT',
-      smtCC,
-      smtW1,
-      smtW2,
-      smtW3,
-      smtW4,
-      smtMonthEndDL,
-      smtApsDL,
-      '98.6%'
-    ),
-    makeRow(
-      'PCA',
-      'PCA',
-      pcaCC,
-      pcaW1,
-      pcaW2,
-      pcaW3,
-      pcaW4,
-      pcaMonthEndDL,
-      pcaApsDL,
-      '96.8%'
-    ),
-    makeRow(
-      'System Assembly',
-      'System Assembly',
-      sysCC,
-      sysW1,
-      sysW2,
-      sysW3,
-      sysW4,
-      sysMonthEndDL,
-      sysApsDL,
-      '97.2%'
-    ),
-    makeRow(
-      'Quality Control',
-      'Quality',
-      qcCC,
-      qcW1,
-      qcW2,
-      qcW3,
-      qcW4,
-      qcMonthEndDL,
-      qcApsDL,
-      '99.1%'
-    ),
-    makeRow(
-      'Troubleshooting',
-      'Troubleshooting',
-      tsCC,
-      tsW1,
-      tsW2,
-      tsW3,
-      tsW4,
-      tsMonthEndDL,
-      tsApsDL,
-      '97.5%'
-    ),
-    makeRow(
-      'Warehouse Logistics',
-      'Warehouse',
-      whCC,
-      whW1,
-      whW2,
-      whW3,
-      whW4,
-      whMonthEndDL,
-      whApsDL,
-      '98.0%'
-    ),
-  ];
+  return queryHrDatabaseBySite(
+    site,
+    apsPlan,
+    month,
+    allSites,
+    Object.keys(perSitePlans).length > 0 ? perSitePlans : undefined,
+    filterDeptCodes
+  ).departmentRows;
 }
 
 export function getMonthDailyStats(
@@ -1325,57 +1121,26 @@ export function getAugustDailyStats(site: SiteData, dateStr: string, plantFilter
   return getMonthDailyStats(site, 8, dateStr, plantFilter);
 }
 
-// Monthly Budget Seasonality Factors reflecting manufacturing capacity ramp, working days, and HR budgeting targets
-export const MONTHLY_BUDGET_FACTORS: Record<number, number> = {
-  1: 0.94,  // Jan: Post-holiday ramp-up (21 working days)
-  2: 0.88,  // Feb: Lunar New Year holiday break (17 working days)
-  3: 0.96,  // Mar: Post-LNY capacity restoration (22 working days)
-  4: 0.99,  // Apr: Q2 steady baseline (21 working days)
-  5: 1.01,  // May: Pre-summer ramp build (21 working days)
-  6: 1.04,  // Jun: High run-rate manufacturing (22 working days)
-  7: 1.06,  // Jul: Q3 volume ramp (23 working days)
-  8: 1.10,  // Aug: Master peak production schedule (12,658 units, 8 lines, 18 shifts, 22 working days)
-  9: 1.07,  // Sep: Sustained high run-rate (21 working days)
-  10: 1.11, // Oct: Q4 release peak volume (22 working days)
-  11: 1.06, // Nov: Year-end delivery push (21 working days)
-  12: 1.01, // Dec: Year-end balancing & audit (22 working days)
-};
-
-export function getMonthlyBudgetManpower(site: SiteData, month: number): {
+export function getMonthlyBudgetManpower(
+  site: SiteData,
+  month: number,
+  allSites?: Record<string, SiteData>
+): {
   total: number;
   dl: number;
   idl: number;
   annualAverage: number;
   factor: number;
 } {
-  // If site has explicit configured monthly budgets override
-  if (site.monthlyBudgets && site.monthlyBudgets[month]) {
-    const mb = site.monthlyBudgets[month];
-    return {
-      total: mb.total,
-      dl: mb.dl,
-      idl: mb.idl,
-      annualAverage: site.yearlyBudgetManpower || mb.total,
-      factor: 1.0,
-    };
-  }
-
-  const annualBaseTotal = site.yearlyBudgetManpower || 1290;
-  const annualBaseDL = site.yearlyBudgetDL || Math.round(annualBaseTotal * 0.953);
-  const annualBaseIDL = site.yearlyBudgetIDL !== undefined ? site.yearlyBudgetIDL : Math.max(0, annualBaseTotal - annualBaseDL);
-
-  const factor = MONTHLY_BUDGET_FACTORS[month] || 1.0;
-  const total = Math.round(annualBaseTotal * factor);
-  const dlRatio = annualBaseTotal > 0 ? annualBaseDL / annualBaseTotal : 0.953;
-  const dl = Math.round(total * dlRatio);
-  const idl = total - dl;
-
+  const base = getBaseMonthlyBudgetManpower(site, month);
+  // Apply Department Code HR database filter ratio so Budget reflects configured Department Codes
+  const hrQuery = querySiteHrManpower(site, 2026, month, allSites);
   return {
-    total,
-    dl,
-    idl,
-    annualAverage: annualBaseTotal,
-    factor,
+    total: hrQuery.totals.budgetTotal,
+    dl: hrQuery.totals.budgetDL,
+    idl: hrQuery.totals.budgetIDL,
+    annualAverage: base.annualAverage,
+    factor: base.factor,
   };
 }
 
@@ -1385,14 +1150,12 @@ export function generate12MonthTrend(
   selectedMonth: number,
   allSites?: Record<string, SiteData>
 ) {
-  const basePlan =
-    site.id === 'overall' && allSites
-      ? generateOverallApsPlan(allSites, selectedYear, selectedMonth)
-      : generateMonthlyApsPlan(site, selectedYear, selectedMonth);
+  const hrQuery = querySiteHrManpower(site, selectedYear, selectedMonth, allSites);
+  const basePlan = hrQuery.apsPlan;
   const baseApsDL = basePlan.totalApsDemandDL;
-  const baseHrDL = site.actualHrDL || baseApsDL;
+  const baseHrDL = hrQuery.totals.monthEndDL;
   const baseApsIDL = basePlan.fixedIDL;
-  const baseHrIDL = site.actualHrIDL !== undefined ? site.actualHrIDL : baseApsIDL;
+  const baseHrIDL = hrQuery.totals.monthEndIDL;
 
   // Real operational monthly variations based on master APS production plan schedule (Jan - Aug 2026 CPU Assembly)
   const monthlySeasonality = [

@@ -292,18 +292,25 @@ export interface MonthlyApsPlan {
 
 export interface CostCenterPayrollWeekly {
   department: string;
-  processType: 'SMT' | 'PCA' | 'System Assembly' | 'Quality' | 'Troubleshooting' | 'Warehouse';
+  processType: 'SMT' | 'PCA' | 'System Assembly' | 'Quality' | 'Troubleshooting' | 'Warehouse' | 'Other Support';
   costCenters: string[];
+  deptCodes?: string[];
+  budgetDL?: number;
+  budgetIDL?: number;
+  budgetTotal?: number;
   w1DL: number;
   w2DL: number;
   w3DL: number; // W3 snapshot
   w4DL: number;
   monthEndDL: number; // Month-end final paid direct labor
+  monthEndIDL?: number;
+  monthEndTotal?: number;
   attendanceRate: string;
   apsDemandDL: number;
   varianceDL: number; // monthEndDL - apsDemandDL
   status: 'SURPLUS' | 'BALANCED' | 'DEFICIT';
   actionNeeded: string;
+  matchedRecordCount?: number;
 }
 
 export interface CurrentUser {

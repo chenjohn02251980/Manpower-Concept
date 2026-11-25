@@ -1,7 +1,8 @@
 import React from 'react';
 import { CalculatedMetrics } from '../utils/calculations';
 import { MonthlyApsPlan, SiteData, ViewTab } from '../types';
-import { getMonthlyApsVolumes, getMonthlyBudgetManpower } from '../utils/apsSchedule';
+import { getMonthlyApsVolumes, getMonthlyBudgetManpower, querySiteHrManpower } from '../utils/apsSchedule';
+import { getBaseMonthlyBudgetManpower } from '../utils/hrDatabase';
 
 interface SummaryCardsProps {
   metrics: CalculatedMetrics;
@@ -12,6 +13,7 @@ interface SummaryCardsProps {
   selectedYear?: number;
   selectedMonth?: number;
   currentSite?: SiteData;
+  sites?: Record<string, SiteData>;
   activeTab?: ViewTab;
 }
 
@@ -110,6 +112,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   selectedYear = 2026,
   selectedMonth = 9,
   currentSite,
+  sites,
   activeTab = 'overview',
 }) => {
   // Do not display top KPI blocks on IE Forecast page
@@ -117,15 +120,21 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
     return null;
   }
 
+  // Query HR Database filtered by Department Codes assigned on currentSite (or across all sites in Overall)
+  const hrQuery = React.useMemo(() => {
+    if (!currentSite) return null;
+    return querySiteHrManpower(currentSite, selectedYear, selectedMonth, sites);
+  }, [currentSite, selectedYear, selectedMonth, sites]);
+
   const displayDemand = apsDemandDL !== undefined ? apsDemandDL : metrics.totalDL;
-  const displayActual = hrActualDL !== undefined ? hrActualDL : Math.round(metrics.totalDL * 0.98);
+  const displayActual = hrQuery ? hrQuery.totals.monthEndDL : (hrActualDL !== undefined ? hrActualDL : Math.round(metrics.totalDL * 0.98));
 
   // Total Workforce: DL + IDL
   const totalIDL = apsDemandIDL !== undefined ? apsDemandIDL : (metrics?.totalIDL ?? 0);
   const totalWorkforce = displayDemand + totalIDL;
 
-  // HR Payroll Total Workforce & DL/IDL
-  const hrActualIDL = currentSite?.actualHrIDL !== undefined ? currentSite.actualHrIDL : metrics.totalIDL;
+  // HR Payroll Total Workforce & DL/IDL (filtered from HR Database by Department Code)
+  const hrActualIDL = hrQuery ? hrQuery.totals.monthEndIDL : (currentSite?.actualHrIDL !== undefined ? currentSite.actualHrIDL : metrics.totalIDL);
   const totalHrHeadcount = displayActual + hrActualIDL;
 
   // Gaps
@@ -146,13 +155,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   const hrRatioVal = hrActualIDL > 0 ? (displayActual / hrActualIDL).toFixed(1) : '0.0';
   const hrRatioStr = `${hrRatioVal} : 1`;
 
-  // Yearly Budget Manpower (Connected from HR System, calculated per month based on seasonal capacity)
-  const monthlyBudgetInfo = currentSite ? getMonthlyBudgetManpower(currentSite, selectedMonth) : null;
-  const yearlyBudget = monthlyBudgetInfo?.total || (currentSite?.yearlyBudgetManpower || (totalWorkforce + 10));
-  const yearlyBudgetDL = monthlyBudgetInfo?.dl || (currentSite?.yearlyBudgetDL || (displayDemand + 10));
+  // Yearly Budget Manpower (Filtered from HR Database by Department Code)
+  const monthlyBudgetInfo = currentSite ? getMonthlyBudgetManpower(currentSite, selectedMonth, sites) : null;
+  const baseAnnualInfo = currentSite ? getBaseMonthlyBudgetManpower(currentSite, selectedMonth) : null;
+  const yearlyBudget = hrQuery ? hrQuery.totals.budgetTotal : (monthlyBudgetInfo?.total || (currentSite?.yearlyBudgetManpower || (totalWorkforce + 10)));
+  const yearlyBudgetDL = hrQuery ? hrQuery.totals.budgetDL : (monthlyBudgetInfo?.dl || (currentSite?.yearlyBudgetDL || (displayDemand + 10)));
   const yearlyBudgetIdlFallback = Math.max(0, yearlyBudget - yearlyBudgetDL);
-  const yearlyBudgetIDL = monthlyBudgetInfo?.idl !== undefined ? monthlyBudgetInfo.idl : (currentSite?.yearlyBudgetIDL !== undefined ? currentSite.yearlyBudgetIDL : yearlyBudgetIdlFallback);
-  const annualBaseBudget = monthlyBudgetInfo?.annualAverage || (currentSite?.yearlyBudgetManpower || yearlyBudget);
+  const yearlyBudgetIDL = hrQuery ? hrQuery.totals.budgetIDL : (monthlyBudgetInfo?.idl !== undefined ? monthlyBudgetInfo.idl : (currentSite?.yearlyBudgetIDL !== undefined ? currentSite.yearlyBudgetIDL : yearlyBudgetIdlFallback));
+  const annualBaseBudget = baseAnnualInfo?.annualAverage || monthlyBudgetInfo?.annualAverage || (currentSite?.yearlyBudgetManpower || yearlyBudget);
 
   const yearlyBudgetDlPercent = yearlyBudget > 0 ? Math.round((yearlyBudgetDL / yearlyBudget) * 100) : 0;
   const yearlyBudgetIdlPercent = 100 - yearlyBudgetDlPercent;
@@ -685,7 +695,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-['JetBrains_Mono'] text-xs font-bold text-[#5de6ff] uppercase tracking-wider block">
-                        HR COST CENTER
+                        HR PAID MANPOWER (DEPT CODE)
                       </span>
                       <span className="inline-flex items-center justify-center px-2 py-0.5 h-5 rounded text-[10px] font-['JetBrains_Mono'] font-bold shrink-0 leading-none whitespace-nowrap bg-[#5de6ff]/15 text-[#5de6ff] border border-[#5de6ff]/30">
                         DL + IDL
@@ -1308,7 +1318,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-['JetBrains_Mono'] text-xs font-bold text-[#5de6ff] uppercase tracking-wider block">
-                      HR COST CENTER PAID HEADCOUNT
+                      HR DEPT CODE PAID HEADCOUNT
                     </span>
                     <span className="inline-flex items-center justify-center px-2 py-0.5 h-5 rounded text-[10px] font-['JetBrains_Mono'] font-bold shrink-0 leading-none whitespace-nowrap bg-[#5de6ff]/15 text-[#5de6ff] border border-[#5de6ff]/30">
                       DL + IDL

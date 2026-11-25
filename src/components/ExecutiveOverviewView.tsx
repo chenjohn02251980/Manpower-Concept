@@ -110,7 +110,7 @@ const AnnualCustomTooltip = ({ active, payload, label }: any) => {
           <div className="flex justify-between items-center text-xs">
             <span className="text-[#ffb86b] font-bold flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-sm bg-[#ffb86b]"></span>
-              APS Demand Total (DL+IDL):
+              Demand Schedule Total (DL+IDL):
             </span>
             <span className="font-bold text-[#ffb86b] text-sm">
               {(totalAps ?? 0).toLocaleString()} HC
@@ -263,9 +263,9 @@ const CostCenterCustomTooltip = ({ active, payload, label }: any) => {
             </div>
           )}
 
-          {/* 2. APS Demand Manpower */}
+          {/* 2. Demand Schedule Manpower */}
           <div className="flex justify-between text-[#ffb86b] mt-1">
-            <span>2. APS Demand Manpower:</span>
+            <span>2. Demand Schedule Manpower:</span>
             <span className="font-bold">{aps.toLocaleString()} HC</span>
           </div>
           {data.apsDL !== undefined && (
@@ -335,7 +335,7 @@ const CostCenterCustomTooltip = ({ active, payload, label }: any) => {
 // -------------------------------------------------------------
 export interface CostCenterDiagnosisResult {
   primaryDriver: 'budget' | 'demand' | 'paid';
-  driverName: 'Yearly Budget' | 'APS Demand' | 'HR Paid Manpower';
+  driverName: 'Yearly Budget' | 'Demand Schedule' | 'HR Paid Manpower';
   driverColor: string; // '#a78bfa' | '#ffb86b' | '#5de6ff'
   driverBg: string;
   driverBorder: string;
@@ -362,7 +362,7 @@ export function analyzeCostCenterVariance(
   const absHrDemandGap = Math.abs(hrDemandGap);
 
   let primaryDriver: 'budget' | 'demand' | 'paid' = 'demand';
-  let driverName: 'Yearly Budget' | 'APS Demand' | 'HR Paid Manpower' = 'APS Demand';
+  let driverName: 'Yearly Budget' | 'Demand Schedule' | 'HR Paid Manpower' = 'Demand Schedule';
   let driverColor = '#ffb86b';
   let driverBg = 'bg-[#ffb86b]/15';
   let driverBorder = 'border-[#ffb86b]/40';
@@ -385,14 +385,14 @@ export function analyzeCostCenterVariance(
       analysisSummary = `[Demand vs Paid Gap] Primarily driven by HR Paid shortage (-${Math.abs(hrDemandGap)} HC), ${budgetContext}; expedite recruitment & backfill.`;
       actionText = `Accelerate HR recruiting and shopfloor retention to close the -${Math.abs(hrDemandGap)} HC labor deficit.`;
     } else {
-      analysisSummary = `[Demand vs Paid Gap] Primarily driven by HR Paid surplus (+${hrDemandGap} HC over APS demand); optimize shift deployment.`;
+      analysisSummary = `[Demand vs Paid Gap] Primarily driven by HR Paid surplus (+${hrDemandGap} HC over Demand Schedule); optimize shift deployment.`;
       actionText = `Review shift attendance and overtime hours; cross-deploy staff to support bottleneck processes.`;
     }
   }
-  // 2. APS Demand exceeds Yearly Budget and is the dominant discrepancy
+  // 2. Demand Schedule exceeds Yearly Budget and is the dominant discrepancy
   else if (budgetGap > 0 && budgetGap >= absHrDemandGap) {
     primaryDriver = 'demand';
-    driverName = 'APS Demand';
+    driverName = 'Demand Schedule';
     driverColor = '#ffb86b';
     driverBg = 'bg-[#ffb86b]/15';
     driverBorder = 'border-[#ffb86b]/40';
@@ -402,7 +402,7 @@ export function analyzeCostCenterVariance(
       : hrDemandGap > 0
       ? `HR paid surplus +${hrDemandGap} HC`
       : `HR paid matches demand exactly`;
-    analysisSummary = `[Budget Overrun] Primarily driven by APS Demand order ramp (+${budgetGap} HC vs budget); ${hrStatus}; submit supplemental budget approval.`;
+    analysisSummary = `[Budget Overrun] Primarily driven by Demand Schedule order ramp (+${budgetGap} HC vs budget); ${hrStatus}; submit supplemental budget approval.`;
     actionText = `Submit supplemental headcount request or project quota approval to management.`;
   }
   // 3. HR Paid is higher than budget and demand, pushing budget overrun
@@ -431,13 +431,13 @@ export function analyzeCostCenterVariance(
   else {
     if (absBudgetGap > absHrDemandGap) {
       primaryDriver = budgetGap > 0 ? 'demand' : 'budget';
-      driverName = budgetGap > 0 ? 'APS Demand' : 'Yearly Budget';
+      driverName = budgetGap > 0 ? 'Demand Schedule' : 'Yearly Budget';
       driverColor = budgetGap > 0 ? '#ffb86b' : '#a78bfa';
       driverBg = budgetGap > 0 ? 'bg-[#ffb86b]/15' : 'bg-[#a78bfa]/15';
       driverBorder = budgetGap > 0 ? 'border-[#ffb86b]/40' : 'border-[#a78bfa]/40';
       varianceCategory = budgetGap > 0 ? 'Budget Overrun' : 'Budget Surplus';
       analysisSummary = budgetGap > 0
-        ? `[Budget Overrun] Driven by minor APS Demand increase (+${budgetGap} HC vs budget), supply gap ${hrDemandGap >= 0 ? `+${hrDemandGap}` : hrDemandGap} HC.`
+        ? `[Budget Overrun] Driven by minor Demand Schedule increase (+${budgetGap} HC vs budget), supply gap ${hrDemandGap >= 0 ? `+${hrDemandGap}` : hrDemandGap} HC.`
         : `[Budget Surplus] Minor variance from budget baseline (+${Math.abs(budgetGap)} HC headroom); operations stable.`;
       actionText = 'Process staffing stable; continue monitoring scheduling and fulfillment.';
     } else {
@@ -517,19 +517,19 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   ];
   const monthLabel = monthNames[selectedMonth - 1] || `Month ${selectedMonth}`;
 
-  // Compute monthly APS plan and Cost Center payroll data
+  // Compute monthly APS plan and HR Database payroll data (filtered by Department Code)
   const currentApsPlan =
     currentSite.id === 'overall'
       ? generateOverallApsPlan(sites, selectedYear, selectedMonth)
       : generateMonthlyApsPlan(currentSite, selectedYear, selectedMonth);
-  const costCenterData = generateCostCenterPayrollData(currentSite, currentApsPlan);
+  const costCenterData = generateCostCenterPayrollData(currentSite, currentApsPlan, sites);
 
   const monthlyApsDemandDL = currentApsPlan.totalApsDemandDL;
   const monthlyApsDemandIDL = currentApsPlan.fixedIDL;
   const monthlyApsTotal = monthlyApsDemandDL + monthlyApsDemandIDL;
 
   const hrMonthEndDL = costCenterData.reduce((sum, r) => sum + r.monthEndDL, 0);
-  const hrMonthEndIDL = currentSite.actualHrIDL !== undefined ? currentSite.actualHrIDL : currentApsPlan.fixedIDL;
+  const hrMonthEndIDL = costCenterData.reduce((sum, r) => sum + (r.monthEndIDL ?? 0), 0) || (currentSite.actualHrIDL !== undefined ? currentSite.actualHrIDL : currentApsPlan.fixedIDL);
   const hrTotalPaid = hrMonthEndDL + hrMonthEndIDL;
 
   const netVariance = hrMonthEndDL - monthlyApsDemandDL;
@@ -540,7 +540,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const annualTrend = generate12MonthTrend(currentSite, selectedYear, selectedMonth, sites);
 
   // Selected Month Budget Manpower & Department allocation
-  const selectedMonthBudget = getMonthlyBudgetManpower(currentSite, selectedMonth);
+  const selectedMonthBudget = getMonthlyBudgetManpower(currentSite, selectedMonth, sites);
   const monthlyDeptMap = getOrInitSiteMonthlyData(currentSite);
   const currentMonthDept = monthlyDeptMap[selectedMonth] || monthlyDeptMap[9] || Object.values(monthlyDeptMap)[0];
 
@@ -555,7 +555,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const tsIDL = currentMonthDept.tsIDL ?? (snap?.troubleShooting?.idlEntry ?? 0);
   const whIDL = currentMonthDept.whIDL ?? (snap?.warehouse?.adminIDL ?? 0);
 
-  // Cost center rows
+  // Department Code HR rows
   const smtRow = costCenterData.find((r) => r.processType === 'SMT');
   const pcaRow = costCenterData.find((r) => r.processType === 'PCA');
   const sysRow = costCenterData.find((r) => r.processType === 'System Assembly');
@@ -563,10 +563,10 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const tsRow = costCenterData.find((r) => r.processType === 'Troubleshooting');
   const whRow = costCenterData.find((r) => r.processType === 'Warehouse');
 
-  // Fallback Cost Centers for processes
-  const qcCostCenters = Array.from(new Set(parseCostCenters(currentSite.qualityControl?.oqcCostCenter)));
-  const tsCostCenters = [currentSite.troubleShooting?.costCenter || 'CC-TS-7301'];
-  const whCostCenters = [currentSite.warehouse?.costCenter || 'CC-WH-7401'];
+  // Fallback Department Codes for processes
+  const qcCostCenters = Array.from(new Set(parseCostCenters(currentSite.qualityControl?.costCenter || currentSite.qualityControl?.oqcCostCenter)));
+  const tsCostCenters = parseCostCenters(currentSite.troubleShooting?.costCenter || 'DEPT-TS-7301');
+  const whCostCenters = parseCostCenters(currentSite.warehouse?.costCenter || 'DEPT-WH-7401');
 
   // Process DL demands
   const smtDL = smtRow?.apsDemandDL || 0;
@@ -592,40 +592,37 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
   const tsHrDL = tsRow?.monthEndDL ?? currentMonthDept.tsDL;
   const whHrDL = whRow?.monthEndDL ?? currentMonthDept.whDL;
 
-  // Total HR Actuals (DL + IDL)
-  const smtHrTotal = smtHrDL + smtIDL;
-  const pcaHrTotal = pcaHrDL + pcaIDL;
-  const sysHrTotal = sysHrDL + sysIDL;
-  const qcHrTotal = qcHrDL + qcIDL;
-  const tsHrTotal = tsHrDL + tsIDL;
-  const whHrTotal = whHrDL + whIDL;
+  // Total HR Actuals (DL + IDL from HR Database Department Code filter)
+  const smtHrIDL = smtRow?.monthEndIDL ?? smtIDL;
+  const pcaHrIDL = pcaRow?.monthEndIDL ?? pcaIDL;
+  const sysHrIDL = sysRow?.monthEndIDL ?? sysIDL;
+  const qcHrIDL = qcRow?.monthEndIDL ?? qcIDL;
+  const tsHrIDL = tsRow?.monthEndIDL ?? tsIDL;
+  const whHrIDL = whRow?.monthEndIDL ?? whIDL;
 
-  // Yearly Budget Total Allocation (DL + IDL)
-  const baseTotalHeadcount = currentMonthDept.totalHeadcount || (currentMonthDept.totalDL + currentMonthDept.totalIDL) || 1;
-  const mfgTotalHeadcount = currentMonthDept.mfgDL + currentMonthDept.mfgIDL;
+  const smtHrTotal = smtHrDL + smtHrIDL;
+  const pcaHrTotal = pcaHrDL + pcaHrIDL;
+  const sysHrTotal = sysHrDL + sysHrIDL;
+  const qcHrTotal = qcHrDL + qcHrIDL;
+  const tsHrTotal = tsHrDL + tsHrIDL;
+  const whHrTotal = whHrDL + whHrIDL;
 
-  const budgetMfgTotal = Math.round(selectedMonthBudget.total * (mfgTotalHeadcount / baseTotalHeadcount));
-  const budgetQcTotal = Math.round(selectedMonthBudget.total * ((currentMonthDept.qcDL + currentMonthDept.qcIDL) / baseTotalHeadcount));
-  const budgetTsTotal = Math.round(selectedMonthBudget.total * ((currentMonthDept.tsDL + currentMonthDept.tsIDL) / baseTotalHeadcount));
-  const budgetWhTotal = Math.round(selectedMonthBudget.total * ((currentMonthDept.whDL + currentMonthDept.whIDL) / baseTotalHeadcount));
-
-  // Manufacturing Detailed Process Budget Split (SMT, PCA, Assembly)
-  const mfgDemandTotal = smtApsTotal + pcaApsTotal + sysApsTotal || 1;
-  const budgetSmtTotal = Math.round(budgetMfgTotal * (smtApsTotal / mfgDemandTotal));
-  const budgetPcaTotal = Math.round(budgetMfgTotal * (pcaApsTotal / mfgDemandTotal));
-  const budgetSysTotal = Math.max(0, budgetMfgTotal - (budgetSmtTotal + budgetPcaTotal));
+  // Budget Total Allocation (Directly from HR Database Department Code filter)
+  const budgetSmtTotal = smtRow?.budgetTotal ?? 0;
+  const budgetPcaTotal = pcaRow?.budgetTotal ?? 0;
+  const budgetSysTotal = sysRow?.budgetTotal ?? 0;
+  const budgetQcTotal = qcRow?.budgetTotal ?? 0;
+  const budgetTsTotal = tsRow?.budgetTotal ?? 0;
+  const budgetWhTotal = whRow?.budgetTotal ?? 0;
 
   // DL Budget breakdowns
-  const baseTotalDL = currentMonthDept.totalDL || (currentApsPlan.totalApsDemandDL || 1);
-  const mfgRatio = currentMonthDept.mfgDL / baseTotalDL;
-  const budgetMfgDL = Math.round(selectedMonthBudget.dl * mfgRatio);
-  const mfgTotalBase = smtDL + pcaDL + sysDL || 1;
-  const budgetSmtDL = Math.round(budgetMfgDL * (smtDL / mfgTotalBase));
-  const budgetPcaDL = Math.round(budgetMfgDL * (pcaDL / mfgTotalBase));
-  const budgetSysDL = Math.max(0, budgetMfgDL - (budgetSmtDL + budgetPcaDL));
-  const budgetQcDL = Math.round(selectedMonthBudget.dl * (currentMonthDept.qcDL / baseTotalDL));
-  const budgetTsDL = Math.round(selectedMonthBudget.dl * (currentMonthDept.tsDL / baseTotalDL));
-  const budgetWhDL = Math.round(selectedMonthBudget.dl * (currentMonthDept.whDL / baseTotalDL));
+  const budgetSmtDL = smtRow?.budgetDL ?? 0;
+  const budgetPcaDL = pcaRow?.budgetDL ?? 0;
+  const budgetSysDL = sysRow?.budgetDL ?? 0;
+  const budgetQcDL = qcRow?.budgetDL ?? 0;
+  const budgetTsDL = tsRow?.budgetDL ?? 0;
+  const budgetWhDL = whRow?.budgetDL ?? 0;
+  void selectedMonthBudget;
 
   // Compute diagnosis for each detailed process
   const smtDiag = analyzeCostCenterVariance(budgetSmtTotal, smtApsTotal, smtHrTotal, 'SMT');
@@ -879,7 +876,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                 Yearly Budget Manpower
               </th>
               <th colSpan={3} className="p-2 text-center border-r border-[#524437]/40 bg-[#29221b] text-[#ffb86b] font-semibold">
-                APS Demand Manpower
+                Demand Schedule Manpower
               </th>
               <th colSpan={3} className="p-2 text-center border-r border-[#524437]/40 bg-[#14232a] text-[#5de6ff] font-semibold">
                 HR Paid Manpower
@@ -1331,7 +1328,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                 yAxisId="left"
                 dataKey="apsDemandDL"
                 stackId="aps"
-                name="APS Demand DL"
+                name="Demand Schedule DL"
                 fill="#ffb86b"
                 barSize={12}
               />
@@ -1339,7 +1336,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                 yAxisId="left"
                 dataKey="apsDemandIDL"
                 stackId="aps"
-                name="APS Demand IDL"
+                name="Demand Schedule IDL"
                 fill="#fb923c"
                 radius={[3, 3, 0, 0]}
                 barSize={12}
@@ -1433,8 +1430,8 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                 <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'Inter' }} />
                 {/* 1. Yearly Budget */}
                 <Bar dataKey="yearlyBudget" name={`Yearly Budget (${monthLabel})`} fill="#a78bfa" radius={[3, 3, 0, 0]} />
-                {/* 2. APS Demand Manpower */}
-                <Bar dataKey="apsDemand" name="APS Demand Manpower" fill="#ffb86b" radius={[3, 3, 0, 0]} />
+                {/* 2. Demand Schedule Manpower */}
+                <Bar dataKey="apsDemand" name="Demand Schedule Manpower" fill="#ffb86b" radius={[3, 3, 0, 0]} />
                 {/* 3. HR Paid Manpower */}
                 <Bar dataKey="hrActual" name="HR Paid Manpower" fill="#5de6ff" radius={[3, 3, 0, 0]} />
               </BarChart>
@@ -1455,7 +1452,7 @@ export const ExecutiveOverviewView: React.FC<ExecutiveOverviewViewProps> = ({
                   ● Yearly Budget
                 </span>
                 <span className="text-[10px] text-[#ffb86b] font-['JetBrains_Mono'] bg-[#ffb86b]/10 px-2 py-0.5 rounded border border-[#ffb86b]/20 font-bold">
-                  ● APS Demand
+                  ● Demand Schedule
                 </span>
                 <span className="text-[10px] text-[#5de6ff] font-['JetBrains_Mono'] bg-[#5de6ff]/10 px-2 py-0.5 rounded border border-[#5de6ff]/20 font-bold">
                   ● HR Paid Manpower
